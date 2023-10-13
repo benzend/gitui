@@ -25,30 +25,18 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         .style(Style::default());
 
     let title = Paragraph::new(Text::styled(
-        "List out branches",
+        "Gitui",
         Style::default().fg(Color::Green),
     ))
     .block(title_block);
 
     f.render_widget(title, chunks[0]);
-    let mut list_items = Vec::<ListItem>::new();
-
-    for key in app.pairs.keys() {
-        list_items.push(ListItem::new(Line::from(Span::styled(
-            format!("{: <25} : {}", key, app.pairs.get(key).unwrap()),
-            Style::default().fg(Color::Yellow),
-        ))));
-    }
-
-    let list = List::new(list_items);
-
-    f.render_widget(list, chunks[1]);
     let current_navigation_text = vec![
         // The first half of the text
         match app.current_screen {
             CurrentScreen::Main => Span::styled("Normal Mode", Style::default().fg(Color::Green)),
-            CurrentScreen::Editing => {
-                Span::styled("Editing Mode", Style::default().fg(Color::Yellow))
+            CurrentScreen::ListingBranches => {
+                Span::styled("Listing Branches Mode", Style::default().fg(Color::Yellow))
             }
             CurrentScreen::Exiting => Span::styled("Exiting", Style::default().fg(Color::LightRed)),
         }
@@ -57,7 +45,7 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         Span::styled(" | ", Style::default().fg(Color::White)),
         // The final section of the text, with hints on what the user is editing
         {
-            if let Some(modal_open) = &app.modal {
+            if let Some(modal_open) = &app.list_branches_modal {
                 match modal_open {
                     Modal::Open => {
                         Span::styled("Branches", Style::default().fg(Color::Green))
@@ -78,15 +66,15 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
     let current_keys_hint = {
         match app.current_screen {
             CurrentScreen::Main => Span::styled(
-                "(q) to quit / (e) to make new pair",
+                "(q) to quit / (b) to list branches",
                 Style::default().fg(Color::Red),
             ),
-            CurrentScreen::Editing => Span::styled(
+            CurrentScreen::ListingBranches => Span::styled(
                 "(ESC) to cancel/(Tab) to switch boxes/enter to complete",
                 Style::default().fg(Color::Red),
             ),
             CurrentScreen::Exiting => Span::styled(
-                "(q) to quit / (e) to make new pair",
+                "(q) to quit / (e) to list branches",
                 Style::default().fg(Color::Red),
             ),
         }
@@ -103,36 +91,30 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
     f.render_widget(mode_footer, footer_chunks[0]);
     f.render_widget(key_notes_footer, footer_chunks[1]);
 
-    if let Some(modal_open) = &app.modal {
+    if let Some(_) = &app.list_branches_modal {
         let popup_block = Block::default()
-            .title("Enter a new key-value pair")
+            .title("Branches")
             .borders(Borders::NONE)
             .style(Style::default().bg(Color::DarkGray));
 
         let area = centered_rect(60, 25, f.size());
         f.render_widget(popup_block, area);
 
-        let popup_chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .margin(1)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(area);
+        let mut list_items = Vec::<ListItem>::new();
 
-        let mut key_block = Block::default().title("Key").borders(Borders::ALL);
-        let mut value_block = Block::default().title("Value").borders(Borders::ALL);
+        if let Some(branches) = &app.branches {
+            for branch in branches {
+                list_items.push(ListItem::new(Line::from(Span::styled(
+                    &branch.name,
+                    Style::default().fg(Color::Yellow),
+                ))));
+            }
+        }
 
-        let active_style = Style::default().bg(Color::LightYellow).fg(Color::Black);
+        let list = List::new(list_items);
 
-        match modal_open {
-            Modal::Open => key_block = key_block.style(active_style),
-            Modal::Closed => value_block = value_block.style(active_style),
-        };
-
-        // let key_text = Paragraph::new(app.key_input.clone()).block(key_block);
-        // f.render_widget(key_text, popup_chunks[0]);
-        //
-        // let value_text = Paragraph::new(app.value_input.clone()).block(value_block);
-        // f.render_widget(value_text, popup_chunks[1]);
+        let area = centered_rect(58, 23, f.size());
+        f.render_widget(list, area);
     }
 
     if let CurrentScreen::Exiting = app.current_screen {

@@ -1,9 +1,6 @@
-use serde_json::Result;
-use std::collections::HashMap;
-
 pub enum CurrentScreen {
     Main,
-    Editing,
+    ListingBranches,
     Exiting,
 }
 
@@ -12,8 +9,9 @@ pub enum Modal {
     Closed
 }
 
+#[derive(Debug)]
 pub struct Branch {
-    name: String
+    pub name: String
 }
 
 impl Branch {

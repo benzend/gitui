@@ -13,7 +13,7 @@ use ratatui::{
 mod app;
 mod ui;
 use crate::{
-    app::{App, CurrentScreen, Modal},
+    app::{App, Branch, CurrentScreen, Modal},
     ui::ui,
 };
 
@@ -29,7 +29,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut app = App::new();
     let res = run_app(&mut terminal, &mut app);
 
-
     // restore terminal
     disable_raw_mode()?;
     execute!(
@@ -38,7 +37,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         DisableMouseCapture
     )?;
     terminal.show_cursor()?;
-
 
     if let Err(err) = res {
         println!("{err:?}");
@@ -59,13 +57,23 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
             match app.current_screen {
                 CurrentScreen::Main => match key.code {
                     KeyCode::Char('b') => {
-                        app.current_screen = CurrentScreen::Editing;
+                        app.current_screen = CurrentScreen::ListingBranches;
                         app.list_branches_modal = Some(Modal::Open);
-                        let branches = std::process::Command::new("ls")
-                            .output().expect("to get git branches")
+
+                        let stdout = std::process::Command::new("git")
+                            .arg("branch")
+                            .output()
+                            .expect("to get git branches")
                             .stdout;
 
-                        println!("{:?}", branches);
+                        let branches: Vec<Branch> = String::from_utf8(stdout)
+                            .expect("couldnt parse stdout")
+                            .split("\n")
+                            .into_iter()
+                            .filter(|b| b.len() > 0)
+                            .map(|b| Branch::new(&b))
+                            .collect();
+
                         app.branches = Some(branches);
                     }
                     KeyCode::Char('q') => {
@@ -82,50 +90,45 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                     }
                     _ => {}
                 },
-                CurrentScreen::Editing if key.kind == KeyEventKind::Press => {
-                    match key.code {
-                        KeyCode::Enter => {
-                            if let Some(modal_open) = &app.modal {
-                                match modal_open {
-                                    Modal::Open => {
-                                        app.modal = Some(Modal::Closed);
-                                    }
-                                    Modal::Closed => {
-                                        app.current_screen = CurrentScreen::Main;
-                                    }
+                CurrentScreen::ListingBranches if key.kind == KeyEventKind::Press => match key.code
+                {
+                    KeyCode::Enter => {
+                        if let Some(modal_open) = &app.list_branches_modal {
+                            match modal_open {
+                                Modal::Open => {
+                                    app.list_branches_modal = Some(Modal::Closed);
+                                }
+                                Modal::Closed => {
+                                    app.current_screen = CurrentScreen::Main;
                                 }
                             }
                         }
-                        KeyCode::Backspace => {
-                            if let Some(modal_open) = &app.modal {
-                                match modal_open {
-                                    Modal::Open => {
-                                    }
-                                    Modal::Closed => {
-                                    }
-                                }
-                            }
-                        }
-                        KeyCode::Esc => {
-                            app.current_screen = CurrentScreen::Main;
-                            app.modal = None;
-                        }
-                        KeyCode::Tab => {
-                            app.toggle_modal_open();
-                        }
-                        KeyCode::Char(value) => {
-                            if let Some(modal_open) = &app.modal {
-                                match modal_open {
-                                    Modal::Open => {
-                                    }
-                                    Modal::Closed => {
-                                    }
-                                }
-                            }
-                        }
-                        _ => {}
                     }
-                }
+                    KeyCode::Backspace => {
+                        if let Some(modal_open) = &app.list_branches_modal {
+                            match modal_open {
+                                Modal::Open => {}
+                                Modal::Closed => {}
+                            }
+                        }
+                    }
+                    KeyCode::Esc => {
+                        app.current_screen = CurrentScreen::Main;
+                        app.list_branches_modal = None;
+                    }
+                    KeyCode::Tab => {
+                        app.toggle_branches_modal_open();
+                    }
+                    KeyCode::Char(value) => {
+                        if let Some(modal_open) = &app.list_branches_modal {
+                            match modal_open {
+                                Modal::Open => {}
+                                Modal::Closed => {}
+                            }
+                        }
+                    }
+                    _ => {}
+                },
                 _ => {}
             }
         }
