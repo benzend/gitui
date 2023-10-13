@@ -1,6 +1,6 @@
-# gitui
+# Gitui
 
-A blazingly fast Terminal UI (TUI) for git built with Rust.
+🚀 A blazingly fast Terminal UI (TUI) for git built with Rust.
 
 ## Features
 
