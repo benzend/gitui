@@ -65,7 +65,7 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                 Style::default().fg(Color::Red),
             ),
             CurrentScreen::ListingBranches => Span::styled(
-                "(ESC) to cancel/(Tab) to switch boxes/enter to complete",
+                "(ESC|q) to cancel/(j/k) to navigate/(ENTER) to select",
                 Style::default().fg(Color::Red),
             ),
             CurrentScreen::Exiting => Span::styled(
