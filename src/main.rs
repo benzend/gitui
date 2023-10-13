@@ -112,7 +112,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                             }
                         }
                     }
-                    KeyCode::Esc => {
+                    KeyCode::Esc | KeyCode::Char('q') => {
                         app.current_screen = CurrentScreen::Main;
                         app.list_branches_modal = None;
                     }
