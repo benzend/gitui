@@ -46,7 +46,7 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                 match modal_open {
                     Modal::Open => Span::styled("Branches", Style::default().fg(Color::Green)),
                     Modal::Closed => {
-                        Span::styled("Editing Json Value", Style::default().fg(Color::LightGreen))
+                        Span::styled("Nothing here", Style::default().fg(Color::LightGreen))
                     }
                 }
             } else {
