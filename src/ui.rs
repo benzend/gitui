@@ -24,11 +24,8 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         .borders(Borders::ALL)
         .style(Style::default());
 
-    let title = Paragraph::new(Text::styled(
-        "Gitui",
-        Style::default().fg(Color::Green),
-    ))
-    .block(title_block);
+    let title =
+        Paragraph::new(Text::styled("Gitui", Style::default().fg(Color::Green))).block(title_block);
 
     f.render_widget(title, chunks[0]);
     let current_navigation_text = vec![
@@ -36,7 +33,7 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         match app.current_screen {
             CurrentScreen::Main => Span::styled("Normal Mode", Style::default().fg(Color::Green)),
             CurrentScreen::ListingBranches => {
-                Span::styled("Listing Branches Mode", Style::default().fg(Color::Yellow))
+                Span::styled("Listing Branches Mode", Style::default().fg(Color::Blue))
             }
             CurrentScreen::Exiting => Span::styled("Exiting", Style::default().fg(Color::LightRed)),
         }
@@ -47,9 +44,7 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         {
             if let Some(modal_open) = &app.list_branches_modal {
                 match modal_open {
-                    Modal::Open => {
-                        Span::styled("Branches", Style::default().fg(Color::Green))
-                    }
+                    Modal::Open => Span::styled("Branches", Style::default().fg(Color::Green)),
                     Modal::Closed => {
                         Span::styled("Editing Json Value", Style::default().fg(Color::LightGreen))
                     }
@@ -74,7 +69,7 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                 Style::default().fg(Color::Red),
             ),
             CurrentScreen::Exiting => Span::styled(
-                "(q) to quit / (e) to list branches",
+                "(q) to quit / (b) to list branches",
                 Style::default().fg(Color::Red),
             ),
         }
@@ -160,4 +155,3 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         ])
         .split(popup_layout[1])[1] // Return the middle chunk
 }
-
