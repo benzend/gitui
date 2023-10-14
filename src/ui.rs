@@ -98,17 +98,19 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         let mut list_items = Vec::<ListItem>::new();
 
         if let Some(branches) = &app.branches {
-            for branch in branches {
-                list_items.push(ListItem::new(Line::from(Span::styled(
-                    &branch.name,
-                    Style::default().fg(Color::Yellow),
-                ))));
+            for (i, branch) in branches.values.iter().enumerate() {
+                let style = if branches.index == i {
+                    Style::default().fg(Color::Red).bg(Color::White)
+                } else {
+                    Style::default().fg(Color::Yellow)
+                };
+                list_items.push(ListItem::new(Line::from(Span::styled(branch.get_display_name(), style))));
             }
         }
 
         let list = List::new(list_items);
 
-        let area = centered_rect(58, 23, f.size());
+        let area = centered_rect(55, 20, f.size());
         f.render_widget(list, area);
     }
 
