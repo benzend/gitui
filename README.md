@@ -5,7 +5,7 @@
 ## Features
 
 - [x] View branches (b)
-- [ ] Switch branches
+- [x] Switch branches
 - [ ] Branch fuzzy search
 - [ ] Pull updates
 - [ ] Check for updates
