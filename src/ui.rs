@@ -33,9 +33,10 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         match app.current_screen {
             CurrentScreen::Main => Span::styled("Normal Mode", Style::default().fg(Color::Green)),
             CurrentScreen::ListingBranches => {
-                Span::styled("Listing Branches Mode", Style::default().fg(Color::Blue))
+                Span::styled("Listing Branches", Style::default().fg(Color::Blue))
             }
             CurrentScreen::Exiting => Span::styled("Exiting", Style::default().fg(Color::LightRed)),
+            CurrentScreen::Errors => Span::styled("Error", Style::default().fg(Color::Red)),
         }
         .to_owned(),
         // A white divider bar to separate the two sections
@@ -44,13 +45,34 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         {
             if let Some(modal_open) = &app.list_branches_modal {
                 match modal_open {
+                    Modal::Open => {
+                        let msg = if let Some(branches) = &app.branches {
+                            if let Some(name) = branches.get_currently_checkedout_name() {
+                                format!("Current branch: {}", name)
+                            } else {
+                                "No branch selected".to_string()
+                            }
+                        } else {
+                            "No branch selected".to_string()
+                        };
+                        Span::styled(msg, Style::default().fg(Color::Green))
+                    },
+                    Modal::Closed => {
+                        Span::styled("Nothing here", Style::default().fg(Color::LightGreen))
+                    }
+                }
+            } else if let Some(modal_open) = &app.error_modal {
+                match modal_open {
                     Modal::Open => Span::styled("Branches", Style::default().fg(Color::Green)),
                     Modal::Closed => {
                         Span::styled("Nothing here", Style::default().fg(Color::LightGreen))
                     }
                 }
             } else {
-                Span::styled("Not Editing Anything", Style::default().fg(Color::DarkGray))
+                Span::styled(
+                    "Waiting for something to happen",
+                    Style::default().fg(Color::DarkGray),
+                )
             }
         },
     ];
@@ -72,6 +94,9 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                 "(q) to quit / (b) to list branches",
                 Style::default().fg(Color::Red),
             ),
+            CurrentScreen::Errors => {
+                Span::styled("(ESC|q) to quit", Style::default().fg(Color::Red))
+            }
         }
     };
 
@@ -104,7 +129,36 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                 } else {
                     Style::default().fg(Color::Yellow)
                 };
-                list_items.push(ListItem::new(Line::from(Span::styled(branch.get_display_name(), style))));
+                list_items.push(ListItem::new(Line::from(Span::styled(
+                    branch.get_display_name(),
+                    style,
+                ))));
+            }
+        }
+
+        let list = List::new(list_items);
+
+        let area = centered_rect(55, 20, f.size());
+        f.render_widget(list, area);
+    }
+
+    if let Some(_) = &app.error_modal {
+        let popup_block = Block::default()
+            .title("Errors")
+            .borders(Borders::NONE)
+            .style(Style::default().bg(Color::DarkGray).fg(Color::Red));
+
+        let area = centered_rect(60, 25, f.size());
+        f.render_widget(popup_block, area);
+
+        let mut list_items = Vec::<ListItem>::new();
+
+        if let Some(errors) = &app.errors {
+            for err in errors.iter() {
+                list_items.push(ListItem::new(Line::from(Span::styled(
+                    err.to_string(),
+                    Style::default().fg(Color::Red),
+                ))));
             }
         }
 

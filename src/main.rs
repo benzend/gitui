@@ -101,9 +101,17 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                             match modal_open {
                                 Modal::Open => {
                                     if let Some(branches) = &mut app.branches {
-                                        branches
-                                            .checkout_current()
-                                            .unwrap_or_else(|err| println!("{}", err))
+                                        branches.checkout_current().unwrap_or_else(|err| {
+                                            if let Some(errors) = &mut app.errors {
+                                                errors.push(err);
+                                            } else {
+                                                app.errors = Some(vec![err]);
+                                            }
+
+                                            app.error_modal = Some(Modal::Open);
+                                            app.list_branches_modal = None;
+                                            app.current_screen = CurrentScreen::Errors;
+                                        })
                                     }
                                 }
                                 Modal::Closed => {
@@ -112,20 +120,9 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                             }
                         }
                     }
-                    KeyCode::Backspace => {
-                        if let Some(modal_open) = &app.list_branches_modal {
-                            match modal_open {
-                                Modal::Open => {}
-                                Modal::Closed => {}
-                            }
-                        }
-                    }
                     KeyCode::Esc | KeyCode::Char('q') => {
                         app.current_screen = CurrentScreen::Main;
                         app.list_branches_modal = None;
-                    }
-                    KeyCode::Tab => {
-                        app.toggle_branches_modal_open();
                     }
                     KeyCode::Char(value) => {
                         if let Some(modal_open) = &app.list_branches_modal {
@@ -146,6 +143,14 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                                 Modal::Closed => {}
                             }
                         }
+                    }
+                    _ => {}
+                },
+                CurrentScreen::Errors if key.kind == KeyEventKind::Press => match key.code {
+                    KeyCode::Esc | KeyCode::Char('q') => {
+                        app.current_screen = CurrentScreen::Main;
+                        app.error_modal = None;
+                        app.errors = None;
                     }
                     _ => {}
                 },

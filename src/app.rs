@@ -1,6 +1,8 @@
 pub struct App {
     pub current_screen: CurrentScreen, // the current screen the user is looking at, and will later determine what is rendered.
     pub list_branches_modal: Option<Modal>,
+    pub error_modal: Option<Modal>,
+    pub errors: Option<Vec<GituiError>>,
     pub branches: Option<BranchIterator>,
     pub selected_branch: Option<Branch>,
 }
@@ -10,17 +12,10 @@ impl App {
         App {
             current_screen: CurrentScreen::Main,
             list_branches_modal: None,
+            error_modal: None,
+            errors: None,
             selected_branch: None,
             branches: None,
-        }
-    }
-
-    pub fn toggle_branches_modal_open(&mut self) {
-        if let Some(is_open) = &self.list_branches_modal {
-            match is_open {
-                Modal::Open => self.list_branches_modal = Some(Modal::Closed),
-                Modal::Closed => self.list_branches_modal = Some(Modal::Open),
-            }
         }
     }
 }
@@ -28,12 +23,25 @@ impl App {
 pub enum CurrentScreen {
     Main,
     ListingBranches,
+    Errors,
     Exiting,
 }
 
 pub enum Modal {
     Open,
     Closed,
+}
+
+pub enum GituiError {
+    BranchCheckout(String),
+}
+
+impl std::fmt::Display for GituiError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GituiError::BranchCheckout(s) => write!(f, "{}", s),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -50,9 +58,11 @@ impl Branch {
         }
     }
 
-    pub fn checkout(&mut self) -> Result<(), String> {
+    pub fn checkout(&mut self) -> Result<(), GituiError> {
         if self.is_checked_out {
-            return Err("branch is already checked out".to_string());
+            return Err(GituiError::BranchCheckout(
+                "branch is already checked out".to_string(),
+            ));
         }
         let stdout = std::process::Command::new("git")
             .arg("checkout")
@@ -67,7 +77,10 @@ impl Branch {
             self.is_checked_out = true;
             Ok(())
         } else {
-            Err(format!("failed to checkout branch. output: {}", msg))
+            Err(GituiError::BranchCheckout(format!(
+                "failed to checkout branch. output: {}",
+                msg
+            )))
         }
     }
 
@@ -117,7 +130,19 @@ impl BranchIterator {
         &self.values[self.index]
     }
 
-    pub fn checkout_current(&mut self) -> Result<(), String> {
+    pub fn get_current_name(&self) -> String {
+        self.values[self.index].name.to_string()
+    }
+
+    pub fn get_currently_checkedout_name(&self) -> Option<String> {
+        if let Some(b) = self.values.iter().find(|b| b.is_checked_out) {
+            Some(b.name.to_string())
+        } else {
+            None
+        }
+    }
+
+    pub fn checkout_current(&mut self) -> Result<(), GituiError> {
         self.values[self.index].checkout()?;
 
         let current_branch_name = &self.values[self.index].name;
