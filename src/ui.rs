@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Margin, Rect},
     style::{Color, Style},
     text::{Line, Span, Text},
-    widgets::{Block, Borders, Clear, List, ListItem, Padding, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
     Frame,
 };
 
@@ -57,16 +57,10 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                         };
                         Span::styled(msg, Style::default().fg(Color::Green))
                     }
-                    Modal::Closed => {
-                        Span::styled("Nothing here", Style::default().fg(Color::LightGreen))
-                    }
                 }
             } else if let Some(modal_open) = &app.error_modal {
                 match modal_open {
                     Modal::Open => Span::styled("Branches", Style::default().fg(Color::Green)),
-                    Modal::Closed => {
-                        Span::styled("Nothing here", Style::default().fg(Color::LightGreen))
-                    }
                 }
             } else {
                 Span::styled(
@@ -125,12 +119,27 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
             .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
             .split(area);
 
-        let search_block = Block::default()
-            .title("Search")
-            .borders(Borders::ALL)
-            .style(Style::default().bg(Color::DarkGray));
+        let search_block = if !app.searching {
+            Block::default()
+                .title("Search")
+                .borders(Borders::ALL)
+                .style(Style::default().bg(Color::DarkGray))
+        } else {
+            Block::default()
+                .title("Searching... <esc> to exit")
+                .borders(Borders::ALL)
+                .style(Style::default().bg(Color::DarkGray))
+        };
 
         f.render_widget(search_block, popup_chunks[0]);
+
+        let search_text = if let Some(query) = &app.search_query {
+            Paragraph::new(query.to_string())
+        } else {
+            Paragraph::new("")
+        };
+
+        f.render_widget(search_text, popup_chunks[0].inner(&Margin::new(1, 1)));
 
         let list_block = Block::default()
             .borders(Borders::NONE)
@@ -142,15 +151,27 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
 
         if let Some(branches) = &app.branches {
             for (i, branch) in branches.values.iter().enumerate() {
-                let style = if branches.index == i {
+                let style = if branches.index == i && !app.searching {
                     Style::default().fg(Color::Red).bg(Color::White)
                 } else {
                     Style::default().fg(Color::Yellow)
                 };
-                list_items.push(ListItem::new(Line::from(Span::styled(
-                    branch.get_display_name(),
-                    style,
-                ))));
+                let can_push = if let Some(query) = &app.search_query {
+                    if query.len() > 0 {
+                        branch.get_display_name().contains(query.as_str())
+                    } else {
+                        true
+                    }
+                } else {
+                    true
+                };
+
+                if can_push {
+                    list_items.push(ListItem::new(Line::from(Span::styled(
+                        branch.get_display_name(),
+                        style,
+                    ))));
+                }
             }
         }
 
