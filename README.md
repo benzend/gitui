@@ -4,7 +4,7 @@
 
 
 
-https://github.com/benzend/gitui/assets/70179217/f88df792-d8aa-40d4-a048-1af52100e389
+https://github.com/benzend/gitui/assets/70179217/e72c5199-b685-4720-b14e-0a8779139b26
 
 
 
