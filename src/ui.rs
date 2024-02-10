@@ -1,6 +1,6 @@
 use ratatui::{
     backend::Backend,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout, Margin, Rect},
     style::{Color, Style},
     text::{Line, Span, Text},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
@@ -56,17 +56,11 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                             "No branch selected".to_string()
                         };
                         Span::styled(msg, Style::default().fg(Color::Green))
-                    },
-                    Modal::Closed => {
-                        Span::styled("Nothing here", Style::default().fg(Color::LightGreen))
                     }
                 }
             } else if let Some(modal_open) = &app.error_modal {
                 match modal_open {
                     Modal::Open => Span::styled("Branches", Style::default().fg(Color::Green)),
-                    Modal::Closed => {
-                        Span::styled("Nothing here", Style::default().fg(Color::LightGreen))
-                    }
                 }
             } else {
                 Span::styled(
@@ -117,29 +111,77 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
             .borders(Borders::NONE)
             .style(Style::default().bg(Color::DarkGray));
 
-        let area = centered_rect(60, 25, f.size());
+        let area = centered_rect(60, 30, f.size());
         f.render_widget(popup_block, area);
+
+        let popup_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
+            .split(area);
+
+        let search_block = if !app.searching {
+            Block::default()
+                .title("Search")
+                .borders(Borders::ALL)
+                .style(Style::default().bg(Color::DarkGray))
+        } else {
+            Block::default()
+                .title("Searching... <esc> to exit")
+                .borders(Borders::ALL)
+                .style(Style::default().bg(Color::DarkGray))
+        };
+
+        f.render_widget(search_block, popup_chunks[0]);
+
+        let search_text = if let Some(query) = &app.search_query {
+            Paragraph::new(query.to_string())
+        } else {
+            Paragraph::new("")
+        };
+
+        f.render_widget(search_text, popup_chunks[0].inner(&Margin::new(1, 1)));
+
+        let list_block = Block::default()
+            .borders(Borders::NONE)
+            .style(Style::default().bg(Color::DarkGray));
+
+        f.render_widget(list_block, popup_chunks[1]);
 
         let mut list_items = Vec::<ListItem>::new();
 
         if let Some(branches) = &app.branches {
             for (i, branch) in branches.values.iter().enumerate() {
-                let style = if branches.index == i {
+                let style = if branches.index == i && !app.searching {
                     Style::default().fg(Color::Red).bg(Color::White)
                 } else {
                     Style::default().fg(Color::Yellow)
                 };
-                list_items.push(ListItem::new(Line::from(Span::styled(
-                    branch.get_display_name(),
-                    style,
-                ))));
+                let can_push = if let Some(query) = &app.search_query {
+                    if query.len() > 0 {
+                        branch.get_display_name().contains(query.as_str())
+                    } else {
+                        true
+                    }
+                } else {
+                    true
+                };
+
+                if can_push {
+                    list_items.push(ListItem::new(Line::from(Span::styled(
+                        branch.get_display_name(),
+                        style,
+                    ))));
+                }
             }
         }
 
-        let list = List::new(list_items);
+        let list_inner_block = Block::default()
+            .borders(Borders::NONE)
+            .style(Style::default().bg(Color::DarkGray));
 
-        let area = centered_rect(55, 20, f.size());
-        f.render_widget(list, area);
+        let list = List::new(list_items).block(list_inner_block);
+
+        f.render_widget(list, popup_chunks[1].inner(&Margin::new(1, 1)));
     }
 
     if let Some(_) = &app.error_modal {

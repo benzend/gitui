@@ -1,6 +1,8 @@
 pub struct App {
     pub current_screen: CurrentScreen, // the current screen the user is looking at, and will later determine what is rendered.
     pub list_branches_modal: Option<Modal>,
+    pub searching: bool,
+    pub search_query: Option<String>,
     pub error_modal: Option<Modal>,
     pub errors: Option<Vec<GituiError>>,
     pub branches: Option<BranchIterator>,
@@ -12,6 +14,8 @@ impl App {
         App {
             current_screen: CurrentScreen::Main,
             list_branches_modal: None,
+            searching: false,
+            search_query: None,
             error_modal: None,
             errors: None,
             selected_branch: None,
@@ -29,7 +33,6 @@ pub enum CurrentScreen {
 
 pub enum Modal {
     Open,
-    Closed,
 }
 
 pub enum GituiError {
@@ -111,7 +114,7 @@ impl BranchIterator {
     }
 
     pub fn next(&mut self) -> &Branch {
-        if self.index == self.values.len() - 1 {
+        if self.is_last() {
             self.index = 0;
         } else {
             self.index += 1;
@@ -121,17 +124,13 @@ impl BranchIterator {
     }
 
     pub fn prev(&mut self) -> &Branch {
-        if self.index == 0 {
+        if self.is_first() {
             self.index = self.values.len() - 1;
         } else {
             self.index -= 1;
         }
 
         &self.values[self.index]
-    }
-
-    pub fn get_current_name(&self) -> String {
-        self.values[self.index].name.to_string()
     }
 
     pub fn get_currently_checkedout_name(&self) -> Option<String> {
@@ -158,5 +157,13 @@ impl BranchIterator {
                 b.set_is_checked_out(false)
             }
         }
+    }
+
+    pub fn is_last(&self) -> bool {
+        self.index == self.values.len() - 1
+    }
+
+    pub fn is_first(&self) -> bool {
+        self.index == 0
     }
 }
