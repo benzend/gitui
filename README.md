@@ -12,7 +12,7 @@ https://github.com/benzend/gitui/assets/70179217/f88df792-d8aa-40d4-a048-1af5210
 
 - [x] View branches (b)
 - [x] Switch branches
-- [ ] Branch fuzzy search
+- [x] Branch fuzzy search
 - [ ] Pull updates
 - [ ] Check for updates
 - [ ] Mergetools
