@@ -5,7 +5,7 @@ pub struct App {
     pub search_query: Option<String>,
     pub error_modal: Option<Modal>,
     pub errors: Option<Vec<GituiError>>,
-    pub branches: Option<BranchIterator>,
+    pub branches: Option<Branches>,
     pub selected_branch: Option<Branch>,
 }
 
@@ -100,16 +100,78 @@ impl Branch {
     }
 }
 
+impl From<&Branch> for Branch {
+    fn from(branch: &Branch) -> Branch {
+        Branch::new(branch.name.as_str(), branch.is_checked_out)
+    }
+}
+
+pub struct Branches {
+    values: Vec<Branch>,
+    index: usize
+}
+
+impl Branches {
+    pub fn new(branches: Vec<Branch>) -> Self {
+        Self {
+            values: branches,
+            index: 0
+        }
+    }
+
+    pub fn iterator(&self, query: Option<String>) -> BranchIterator {
+        let mut branches = Vec::new();
+        for b in self.values.iter() {
+            if let Some(q) = &query {
+                if b.name.contains(q) {
+                    branches.push(Branch::from(b));
+                }
+            } else {
+                branches.push(Branch::from(b));
+            }
+        }
+        BranchIterator::new(branches, Some(self.index))
+    }
+
+    pub fn next(&mut self) -> &Branch {
+        if self.is_last() {
+            self.index = 0;
+        } else {
+            self.index += 1;
+        }
+
+        &self.values[self.index]
+    }
+
+    pub fn prev(&mut self) -> &Branch {
+        if self.is_first() {
+            self.index = self.values.len() - 1;
+        } else {
+            self.index -= 1;
+        }
+
+        &self.values[self.index]
+    }
+
+    pub fn is_last(&self) -> bool {
+        self.index == self.values.len() - 1
+    }
+
+    pub fn is_first(&self) -> bool {
+        self.index == 0
+    }
+}
+
 pub struct BranchIterator {
     pub values: Vec<Branch>,
     pub index: usize,
 }
 
 impl BranchIterator {
-    pub fn new(branches: Vec<Branch>) -> Self {
+    pub fn new(branches: Vec<Branch>, index: Option<usize>) -> Self {
         BranchIterator {
             values: branches,
-            index: 0,
+            index: index.unwrap_or(0),
         }
     }
 

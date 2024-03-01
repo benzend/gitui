@@ -13,7 +13,7 @@ use ratatui::{
 mod app;
 mod ui;
 use crate::{
-    app::{App, Branch, BranchIterator, CurrentScreen, Modal},
+    app::{App, Branch, Branches, CurrentScreen, Modal},
     ui::ui,
 };
 
@@ -79,7 +79,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                             })
                             .collect();
 
-                        app.branches = Some(BranchIterator::new(branches));
+                        app.branches = Some(Branches::new(branches));
                     }
                     KeyCode::Char('q') => {
                         app.current_screen = CurrentScreen::Exiting;
@@ -101,7 +101,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                     match key.code {
                         KeyCode::Enter => {
                             if let Some(branches) = &mut app.branches {
-                                branches.checkout_current().unwrap_or_else(|err| {
+                                branches.iterator(None).checkout_current().unwrap_or_else(|err| {
                                     if let Some(errors) = &mut app.errors {
                                         errors.push(err);
                                     } else {
