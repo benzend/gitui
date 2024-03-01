@@ -47,7 +47,7 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                 match modal_open {
                     Modal::Open => {
                         let msg = if let Some(branches) = &app.branches {
-                            if let Some(name) = branches.get_currently_checkedout_name() {
+                            if let Some(name) = branches.iterator(None).get_currently_checkedout_name() {
                                 format!("Current branch: {}", name)
                             } else {
                                 "No branch selected".to_string()
@@ -150,8 +150,8 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         let mut list_items = Vec::<ListItem>::new();
 
         if let Some(branches) = &app.branches {
-            for (i, branch) in branches.values.iter().enumerate() {
-                let style = if branches.index == i && !app.searching {
+            for (i, branch) in branches.iterator(None).values.iter().enumerate() {
+                let style = if branches.iterator(None).index == i && !app.searching {
                     Style::default().fg(Color::Red).bg(Color::White)
                 } else {
                     Style::default().fg(Color::Yellow)
