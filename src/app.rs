@@ -1,25 +1,23 @@
 pub struct App {
     pub current_screen: CurrentScreen, // the current screen the user is looking at, and will later determine what is rendered.
-    pub list_branches_modal: Option<Modal>,
+    pub list_branches_modal: Modal,
     pub searching: bool,
-    pub search_query: Option<String>,
-    pub error_modal: Option<Modal>,
-    pub errors: Option<Vec<GituiError>>,
-    pub branches: Option<Branches>,
-    pub selected_branch: Option<Branch>,
+    pub search_query: String,
+    pub error_modal: Modal,
+    pub errors: Vec<GituiError>,
+    pub branches: Branches,
 }
 
 impl App {
     pub fn new() -> App {
         App {
             current_screen: CurrentScreen::Main,
-            list_branches_modal: None,
+            list_branches_modal: Modal::Closed,
             searching: false,
-            search_query: None,
-            error_modal: None,
-            errors: None,
-            selected_branch: None,
-            branches: None,
+            search_query: String::from(""),
+            error_modal: Modal::Closed,
+            errors: Vec::new(),
+            branches: Branches::new(vec![]),
         }
     }
 }
@@ -33,6 +31,7 @@ pub enum CurrentScreen {
 
 pub enum Modal {
     Open,
+    Closed,
 }
 
 pub enum GituiError {
@@ -119,11 +118,11 @@ impl Branches {
         }
     }
 
-    pub fn iterator(&self, query: Option<String>) -> BranchIterator {
+    pub fn iterator(&self, query: &str) -> BranchIterator {
         let mut branches = Vec::new();
         for b in self.values.iter() {
-            if let Some(q) = &query {
-                if b.name.contains(q) {
+            if query != "" {
+                if b.name.contains(query) {
                     branches.push(Branch::from(b));
                 }
             } else {

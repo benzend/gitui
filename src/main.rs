@@ -58,7 +58,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                 CurrentScreen::Main => match key.code {
                     KeyCode::Char('b') => {
                         app.current_screen = CurrentScreen::ListingBranches;
-                        app.list_branches_modal = Some(Modal::Open);
+                        app.list_branches_modal = Modal::Open;
                         app.searching = true;
 
                         let stdout = std::process::Command::new("git")
@@ -79,7 +79,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                             })
                             .collect();
 
-                        app.branches = Some(Branches::new(branches));
+                        app.branches = Branches::new(branches);
                     }
                     KeyCode::Char('q') => {
                         app.current_screen = CurrentScreen::Exiting;
@@ -100,58 +100,48 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                 {
                     match key.code {
                         KeyCode::Enter => {
-                            if let Some(branches) = &mut app.branches {
-                                branches.iterator(None).checkout_current().unwrap_or_else(|err| {
-                                    if let Some(errors) = &mut app.errors {
-                                        errors.push(err);
-                                    } else {
-                                        app.errors = Some(vec![err]);
-                                    }
+                            app.branches.iterator("").checkout_current().unwrap_or_else(|err| {
+                                if app.errors.len() > 0 {
+                                    app.errors.push(err);
+                                } else {
+                                    app.errors = vec![err];
+                                }
 
-                                    app.error_modal = Some(Modal::Open);
-                                    app.list_branches_modal = None;
-                                    app.current_screen = CurrentScreen::Errors;
-                                })
-                            }
+                                app.error_modal = Modal::Open;
+                                app.list_branches_modal = Modal::Closed;
+                                app.current_screen = CurrentScreen::Errors;
+                            })
                         }
                         KeyCode::Esc | KeyCode::Char('q') => {
                             app.current_screen = CurrentScreen::Main;
-                            app.list_branches_modal = None;
+                            app.list_branches_modal = Modal::Closed;
                         }
 
                         KeyCode::Char(value) => match value {
                             'j' => {
-                                if let Some(branches) = &mut app.branches {
-                                    if branches.is_last() {
-                                        app.searching = true;
-                                    }
-                                    branches.next();
+                                if app.branches.is_last() {
+                                    app.searching = true;
                                 }
+                                app.branches.next();
                             }
                             'k' => {
-                                if let Some(branches) = &mut app.branches {
-                                    if branches.is_first() {
-                                        app.searching = true;
-                                    }
-                                    branches.prev();
+                                if app.branches.is_first() {
+                                    app.searching = true;
                                 }
+                                app.branches.prev();
                             }
                             c => {
                                 print!("{}", c)
                             }
                         },
                         KeyCode::Tab => {
-                            if let Some(branches) = &mut app.branches {
-                                if branches.is_last() {
-                                    app.searching = true;
-                                }
+                            if app.branches.is_last() {
+                                app.searching = true;
                             }
                         }
                         KeyCode::BackTab => {
-                            if let Some(branches) = &mut app.branches {
-                                if branches.is_first() {
-                                    app.searching = true;
-                                }
+                            if app.branches.is_first() {
+                                app.searching = true;
                             }
                         }
                         _ => {}
@@ -161,27 +151,20 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                     if app.searching && key.kind == KeyEventKind::Press =>
                 {
                     match key.code {
-                        KeyCode::Backspace => match &app.search_query {
-                            Some(query) => {
-                                if query.len() > 0 {
-                                    app.search_query = Some(remove_last_char(&query).to_string());
-                                }
+                        KeyCode::Backspace => {
+                            if !app.search_query.is_empty() {
+                                app.search_query = remove_last_char(&app.search_query).to_string();
                             }
-                            _ => {}
                         },
                         KeyCode::Esc => {
                             app.searching = false;
-                            if let Some(branches) = &mut app.branches {
-                                if !branches.is_first() {
-                                    branches.next();
-                                }
+
+                            if !app.branches.is_first() {
+                                app.branches.next();
                             }
                         }
-                        KeyCode::Char(value) => match &app.search_query {
-                            Some(query) => {
-                                app.search_query = Some(format!("{}{}", query, value));
-                            }
-                            None => app.search_query = Some(value.to_string()),
+                        KeyCode::Char(value) => {
+                            app.search_query = format!("{}{}", app.search_query, value);
                         },
                         _ => {}
                     }
@@ -189,8 +172,8 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                 CurrentScreen::Errors if key.kind == KeyEventKind::Press => match key.code {
                     KeyCode::Esc | KeyCode::Char('q') => {
                         app.current_screen = CurrentScreen::Main;
-                        app.error_modal = None;
-                        app.errors = None;
+                        app.error_modal = Modal::Closed;
+                        app.errors = Vec::new();
                     }
                     _ => {}
                 },
