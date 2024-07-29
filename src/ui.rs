@@ -109,7 +109,7 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
             .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
             .split(area);
 
-        let search_block = if !app.searching {
+        let search_block = if !app.in_search_bar {
             Block::default()
                 .title("Search")
                 .borders(Borders::ALL)
@@ -140,7 +140,7 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         let mut list_items = Vec::<ListItem>::new();
 
         for (i, branch) in app.branches.iterator("").values.iter().enumerate() {
-            let style = if app.branches.iterator("").index == i && !app.searching {
+            let style = if app.branches.iterator("").index == i && !app.in_search_bar {
                 Style::default().fg(Color::Red).bg(Color::White)
             } else {
                 Style::default().fg(Color::Yellow)

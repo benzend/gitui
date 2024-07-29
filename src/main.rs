@@ -59,7 +59,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                     KeyCode::Char('b') => {
                         app.current_screen = CurrentScreen::ListingBranches;
                         app.list_branches_modal = Modal::Open;
-                        app.searching = true;
+                        app.in_search_bar = true;
 
                         let stdout = std::process::Command::new("git")
                             .arg("branch")
@@ -96,7 +96,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                     _ => {}
                 },
                 CurrentScreen::ListingBranches
-                    if !app.searching && key.kind == KeyEventKind::Press =>
+                    if !app.in_search_bar && key.kind == KeyEventKind::Press =>
                 {
                     match key.code {
                         KeyCode::Enter => {
@@ -120,13 +120,13 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                         KeyCode::Char(value) => match value {
                             'j' => {
                                 if app.branches.is_last() {
-                                    app.searching = true;
+                                    app.in_search_bar = true;
                                 }
                                 app.branches.next();
                             }
                             'k' => {
                                 if app.branches.is_first() {
-                                    app.searching = true;
+                                    app.in_search_bar = true;
                                 }
                                 app.branches.prev();
                             }
@@ -136,19 +136,19 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                         },
                         KeyCode::Tab => {
                             if app.branches.is_last() {
-                                app.searching = true;
+                                app.in_search_bar = true;
                             }
                         }
                         KeyCode::BackTab => {
                             if app.branches.is_first() {
-                                app.searching = true;
+                                app.in_search_bar = true;
                             }
                         }
                         _ => {}
                     }
                 }
                 CurrentScreen::ListingBranches
-                    if app.searching && key.kind == KeyEventKind::Press =>
+                    if app.in_search_bar && key.kind == KeyEventKind::Press =>
                 {
                     match key.code {
                         KeyCode::Backspace => {
@@ -157,7 +157,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                             }
                         },
                         KeyCode::Esc => {
-                            app.searching = false;
+                            app.in_search_bar = false;
 
                             if !app.branches.is_first() {
                                 app.branches.next();

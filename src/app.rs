@@ -1,7 +1,7 @@
 pub struct App {
     pub current_screen: CurrentScreen, // the current screen the user is looking at, and will later determine what is rendered.
     pub list_branches_modal: Modal,
-    pub searching: bool,
+    pub in_search_bar: bool,
     pub search_query: String,
     pub error_modal: Modal,
     pub errors: Vec<GituiError>,
@@ -13,7 +13,7 @@ impl App {
         App {
             current_screen: CurrentScreen::Main,
             list_branches_modal: Modal::Closed,
-            searching: false,
+            in_search_bar: false,
             search_query: String::from(""),
             error_modal: Modal::Closed,
             errors: Vec::new(),
