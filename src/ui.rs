@@ -44,7 +44,7 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         // The final section of the text, with hints on what the user is editing
         {
             if matches!(&app.list_branches_modal, Modal::Open) {
-                let msg = if let Some(name) = app.branches.iterator("").get_currently_checkedout_name() {
+                let msg = if let Some(name) = app.branches.get_currently_checkedout_name() {
                         format!("Current branch: {}", name)
                 } else {
                     "No branch selected".to_string()
@@ -139,8 +139,8 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
 
         let mut list_items = Vec::<ListItem>::new();
 
-        for (i, branch) in app.branches.iterator("").values.iter().enumerate() {
-            let style = if app.branches.iterator("").index == i && !app.in_search_bar {
+        for (i, branch) in app.branches.get_values().iter().enumerate() {
+            let style = if app.branches.get_index() == i && !app.in_search_bar {
                 Style::default().fg(Color::Red).bg(Color::White)
             } else {
                 Style::default().fg(Color::Yellow)

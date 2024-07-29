@@ -105,34 +105,112 @@ impl From<&Branch> for Branch {
     }
 }
 
+#[derive(Debug)]
+pub struct IndexedBranch {
+    pub name: String,
+    pub is_checked_out: bool,
+    pub index: usize,
+}
+
+impl IndexedBranch {
+    pub fn new(name: &str, is_checked_out: bool, index: usize) -> Self {
+        Self {
+            name: name.to_string(),
+            is_checked_out,
+            index
+        }
+    }
+
+    pub fn checkout(&mut self) -> Result<(), GituiError> {
+        if self.is_checked_out {
+            return Err(GituiError::BranchCheckout(
+                "branch is already checked out".to_string(),
+            ));
+        }
+        let stdout = std::process::Command::new("git")
+            .arg("checkout")
+            .arg(&self.name.trim())
+            .output()
+            .expect("couldnt checkout branch")
+            .stdout;
+
+        let msg = String::from_utf8(stdout).expect("couldn't parse output");
+
+        if !msg.contains("error:") {
+            self.is_checked_out = true;
+            Ok(())
+        } else {
+            Err(GituiError::BranchCheckout(format!(
+                "failed to checkout branch. output: {}",
+                msg
+            )))
+        }
+    }
+
+    pub fn get_display_name(&self) -> String {
+        if self.is_checked_out {
+            format!("* {}", self.name)
+        } else {
+            self.name.to_string()
+        }
+    }
+
+    pub fn set_is_checked_out(&mut self, value: bool) {
+        self.is_checked_out = value;
+    }
+}
+
+impl From<&IndexedBranch> for IndexedBranch {
+    fn from(branch: &IndexedBranch) -> IndexedBranch {
+        IndexedBranch::new(branch.name.as_str(), branch.is_checked_out, branch.index)
+    }
+}
+
 pub struct Branches {
-    values: Vec<Branch>,
+    values: Vec<IndexedBranch>,
     index: usize
 }
 
 impl Branches {
     pub fn new(branches: Vec<Branch>) -> Self {
+        let mut indexed: Vec<IndexedBranch> = Vec::new();
+        for (i, b) in branches.iter().enumerate() {
+            indexed.push(IndexedBranch::new(&b.name, b.is_checked_out, i));
+        }
+
         Self {
-            values: branches,
+            values: indexed,
             index: 0
         }
     }
 
-    pub fn iterator(&self, query: &str) -> BranchIterator {
+    pub fn get_values(&self) -> &Vec<IndexedBranch> {
+        &self.values
+    }
+
+    pub fn get_index(&self) -> usize {
+        self.index
+    }
+
+    pub fn reset_index(&mut self) {
+        self.index = 0;
+    }
+
+    pub fn filtered(&self, query: &str) -> BranchIterator {
         let mut branches = Vec::new();
         for b in self.values.iter() {
             if query != "" {
                 if b.name.contains(query) {
-                    branches.push(Branch::from(b));
+                    branches.push(IndexedBranch::from(b));
                 }
             } else {
-                branches.push(Branch::from(b));
+                branches.push(IndexedBranch::from(b));
             }
         }
         BranchIterator::new(branches, Some(self.index))
     }
 
-    pub fn next(&mut self) -> &Branch {
+    pub fn next(&mut self) -> &IndexedBranch {
         if self.is_last() {
             self.index = 0;
         } else {
@@ -142,7 +220,7 @@ impl Branches {
         &self.values[self.index]
     }
 
-    pub fn prev(&mut self) -> &Branch {
+    pub fn prev(&mut self) -> &IndexedBranch {
         if self.is_first() {
             self.index = self.values.len() - 1;
         } else {
@@ -159,22 +237,135 @@ impl Branches {
     pub fn is_first(&self) -> bool {
         self.index == 0
     }
+
+    pub fn select_from_index(&mut self, index: usize) -> &IndexedBranch {
+        self.index = index;
+        &self.values[self.index]
+    }
+
+    pub fn get_currently_checkedout_name(&self) -> Option<String> {
+        if let Some(b) = self.values.iter().find(|b| b.is_checked_out) {
+            Some(b.name.to_string())
+        } else {
+            None
+        }
+    }
+
+    pub fn checkout_current(&mut self) -> Result<(), GituiError> {
+        self.values[self.index].checkout()?;
+
+        let current_branch_name = &self.values[self.index].name;
+
+        self.uncheckout_all_except(current_branch_name.to_string());
+
+        Ok(())
+    }
+
+    pub fn uncheckout_all_except(&mut self, name: String) {
+        for b in self.values.iter_mut() {
+            if name != b.name {
+                b.set_is_checked_out(false)
+            }
+        }
+    }
+
 }
 
 pub struct BranchIterator {
-    pub values: Vec<Branch>,
+    pub values: Vec<IndexedBranch>,
     pub index: usize,
 }
 
 impl BranchIterator {
-    pub fn new(branches: Vec<Branch>, index: Option<usize>) -> Self {
+    pub fn new(branches: Vec<IndexedBranch>, index: Option<usize>) -> Self {
         BranchIterator {
             values: branches,
             index: index.unwrap_or(0),
         }
     }
 
-    pub fn next(&mut self) -> &Branch {
+    pub fn next(&mut self) -> Option<&IndexedBranch> {
+        if self.is_empty() {
+            return None;
+        }
+        if self.is_last() {
+            self.index = 0;
+        } else {
+            self.index += 1;
+        }
+
+        Some(&self.values[self.index])
+    }
+
+    pub fn prev(&mut self) -> Option<&IndexedBranch> {
+        if self.is_empty() {
+            return None;
+        }
+        if self.is_first() {
+            self.index = self.values.len() - 1;
+        } else {
+            self.index -= 1;
+        }
+
+        Some(&self.values[self.index])
+    }
+
+    pub fn get_currently_checkedout_name(&self) -> Option<String> {
+        if let Some(b) = self.values.iter().find(|b| b.is_checked_out) {
+            Some(b.name.to_string())
+        } else {
+            None
+        }
+    }
+
+    pub fn checkout_current(&mut self) -> Result<(), GituiError> {
+        self.values[self.index].checkout()?;
+
+        let current_branch_name = &self.values[self.index].name;
+
+        self.uncheckout_all_except(current_branch_name.to_string());
+
+        Ok(())
+    }
+
+    pub fn uncheckout_all_except(&mut self, name: String) {
+        for b in self.values.iter_mut() {
+            if name != b.name {
+                b.set_is_checked_out(false)
+            }
+        }
+    }
+
+    pub fn is_last(&self) -> bool {
+        if self.is_empty() {
+            return true;
+        }
+        self.index == self.values.len() - 1
+    }
+
+    pub fn is_first(&self) -> bool {
+        self.index == 0
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.values.len() == 0
+    }
+}
+
+pub struct IndexedBranchIterator {
+    pub values: Vec<IndexedBranch>,
+    pub index: usize,
+}
+
+impl IndexedBranchIterator {
+    pub fn new(branches: Vec<IndexedBranch>, index: Option<usize>) -> Self {
+        Self {
+            values: branches,
+            index: index.unwrap_or(0),
+        }
+    }
+
+    pub fn next(&mut self) -> &IndexedBranch {
         if self.is_last() {
             self.index = 0;
         } else {
@@ -184,7 +375,7 @@ impl BranchIterator {
         &self.values[self.index]
     }
 
-    pub fn prev(&mut self) -> &Branch {
+    pub fn prev(&mut self) -> &IndexedBranch {
         if self.is_first() {
             self.index = self.values.len() - 1;
         } else {

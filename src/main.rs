@@ -99,8 +99,10 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                     if !app.in_search_bar && key.kind == KeyEventKind::Press =>
                 {
                     match key.code {
-                        KeyCode::Enter => {
-                            app.branches.iterator("").checkout_current().unwrap_or_else(|err| {
+                        KeyCode::Enter => app
+                            .branches
+                            .checkout_current()
+                            .unwrap_or_else(|err| {
                                 if app.errors.len() > 0 {
                                     app.errors.push(err);
                                 } else {
@@ -110,37 +112,45 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                                 app.error_modal = Modal::Open;
                                 app.list_branches_modal = Modal::Closed;
                                 app.current_screen = CurrentScreen::Errors;
-                            })
-                        }
+                            }),
                         KeyCode::Esc | KeyCode::Char('q') => {
                             app.current_screen = CurrentScreen::Main;
                             app.list_branches_modal = Modal::Closed;
+                            app.branches.reset_index();
                         }
 
                         KeyCode::Char(value) => match value {
                             'j' => {
-                                if app.branches.is_last() {
+                                if app.branches.filtered(&app.search_query).is_last() {
                                     app.in_search_bar = true;
                                 }
-                                app.branches.next();
+                                if let Some(next) = app.branches.filtered(&app.search_query).next()
+                                {
+                                    app.branches.select_from_index(next.index);
+                                } else {
+                                    println!("wtf yo");
+                                }
                             }
                             'k' => {
-                                if app.branches.is_first() {
+                                if app.branches.filtered(&app.search_query).is_first() {
                                     app.in_search_bar = true;
                                 }
-                                app.branches.prev();
+                                if let Some(prev) = app.branches.filtered(&app.search_query).prev()
+                                {
+                                    app.branches.select_from_index(prev.index);
+                                }
                             }
                             c => {
                                 print!("{}", c)
                             }
                         },
                         KeyCode::Tab => {
-                            if app.branches.is_last() {
+                            if app.branches.filtered(&app.search_query).is_last() {
                                 app.in_search_bar = true;
                             }
                         }
                         KeyCode::BackTab => {
-                            if app.branches.is_first() {
+                            if app.branches.filtered(&app.search_query).is_first() {
                                 app.in_search_bar = true;
                             }
                         }
@@ -155,17 +165,22 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                             if !app.search_query.is_empty() {
                                 app.search_query = remove_last_char(&app.search_query).to_string();
                             }
-                        },
+                        }
                         KeyCode::Esc => {
                             app.in_search_bar = false;
 
-                            if !app.branches.is_first() {
-                                app.branches.next();
+                            app.branches.reset_index();
+
+                            if !app.branches.filtered(&app.search_query).is_first() {
+                                if let Some(next) = app.branches.filtered(&app.search_query).next()
+                                {
+                                    app.branches.select_from_index(next.index);
+                                }
                             }
                         }
                         KeyCode::Char(value) => {
                             app.search_query = format!("{}{}", app.search_query, value);
-                        },
+                        }
                         _ => {}
                     }
                 }
