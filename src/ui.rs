@@ -43,25 +43,15 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         Span::styled(" | ", Style::default().fg(Color::White)),
         // The final section of the text, with hints on what the user is editing
         {
-            if let Some(modal_open) = &app.list_branches_modal {
-                match modal_open {
-                    Modal::Open => {
-                        let msg = if let Some(branches) = &app.branches {
-                            if let Some(name) = branches.get_currently_checkedout_name() {
-                                format!("Current branch: {}", name)
-                            } else {
-                                "No branch selected".to_string()
-                            }
-                        } else {
-                            "No branch selected".to_string()
-                        };
-                        Span::styled(msg, Style::default().fg(Color::Green))
-                    }
-                }
-            } else if let Some(modal_open) = &app.error_modal {
-                match modal_open {
-                    Modal::Open => Span::styled("Branches", Style::default().fg(Color::Green)),
-                }
+            if matches!(&app.list_branches_modal, Modal::Open) {
+                let msg = if let Some(name) = app.branches.get_currently_checkedout_name() {
+                        format!("Current branch: {}", name)
+                } else {
+                    "No branch selected".to_string()
+                };
+                Span::styled(msg, Style::default().fg(Color::Green))
+            } else if matches!(app.error_modal, Modal::Open) {
+                Span::styled("Branches", Style::default().fg(Color::Green))
             } else {
                 Span::styled(
                     "Waiting for something to happen",
@@ -105,7 +95,7 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
     f.render_widget(mode_footer, footer_chunks[0]);
     f.render_widget(key_notes_footer, footer_chunks[1]);
 
-    if let Some(_) = &app.list_branches_modal {
+    if matches!(app.list_branches_modal, Modal::Open) {
         let popup_block = Block::default()
             .title("Branches")
             .borders(Borders::NONE)
@@ -119,7 +109,7 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
             .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
             .split(area);
 
-        let search_block = if !app.searching {
+        let search_block = if !app.in_search_bar {
             Block::default()
                 .title("Search")
                 .borders(Borders::ALL)
@@ -133,8 +123,8 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
 
         f.render_widget(search_block, popup_chunks[0]);
 
-        let search_text = if let Some(query) = &app.search_query {
-            Paragraph::new(query.to_string())
+        let search_text = if !app.search_query.is_empty() {
+            Paragraph::new(app.search_query.to_string())
         } else {
             Paragraph::new("")
         };
@@ -149,29 +139,23 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
 
         let mut list_items = Vec::<ListItem>::new();
 
-        if let Some(branches) = &app.branches {
-            for (i, branch) in branches.values.iter().enumerate() {
-                let style = if branches.index == i && !app.searching {
-                    Style::default().fg(Color::Red).bg(Color::White)
-                } else {
-                    Style::default().fg(Color::Yellow)
-                };
-                let can_push = if let Some(query) = &app.search_query {
-                    if query.len() > 0 {
-                        branch.get_display_name().contains(query.as_str())
-                    } else {
-                        true
-                    }
-                } else {
-                    true
-                };
+        for (i, branch) in app.branches.get_values().iter().enumerate() {
+            let style = if app.branches.get_index() == i && !app.in_search_bar {
+                Style::default().fg(Color::Red).bg(Color::White)
+            } else {
+                Style::default().fg(Color::Yellow)
+            };
+            let can_push = if !app.search_query.is_empty() {
+                branch.get_display_name().contains(app.search_query.as_str())
+            } else {
+                true
+            };
 
-                if can_push {
-                    list_items.push(ListItem::new(Line::from(Span::styled(
-                        branch.get_display_name(),
-                        style,
-                    ))));
-                }
+            if can_push {
+                list_items.push(ListItem::new(Line::from(Span::styled(
+                    branch.get_display_name(),
+                    style,
+                ))));
             }
         }
 
@@ -184,7 +168,7 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         f.render_widget(list, popup_chunks[1].inner(&Margin::new(1, 1)));
     }
 
-    if let Some(_) = &app.error_modal {
+    if matches!(app.error_modal, Modal::Open) {
         let popup_block = Block::default()
             .title("Errors")
             .borders(Borders::NONE)
@@ -195,8 +179,8 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
 
         let mut list_items = Vec::<ListItem>::new();
 
-        if let Some(errors) = &app.errors {
-            for err in errors.iter() {
+        if !app.errors.is_empty() {
+            for err in app.errors.iter() {
                 list_items.push(ListItem::new(Line::from(Span::styled(
                     err.to_string(),
                     Style::default().fg(Color::Red),

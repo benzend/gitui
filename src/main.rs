@@ -13,7 +13,7 @@ use ratatui::{
 mod app;
 mod ui;
 use crate::{
-    app::{App, Branch, BranchIterator, CurrentScreen, Modal},
+    app::{App, Branch, Branches, CurrentScreen, Modal},
     ui::ui,
 };
 
@@ -58,8 +58,8 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                 CurrentScreen::Main => match key.code {
                     KeyCode::Char('b') => {
                         app.current_screen = CurrentScreen::ListingBranches;
-                        app.list_branches_modal = Some(Modal::Open);
-                        app.searching = true;
+                        app.list_branches_modal = Modal::Open;
+                        app.in_search_bar = true;
 
                         let stdout = std::process::Command::new("git")
                             .arg("branch")
@@ -79,7 +79,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                             })
                             .collect();
 
-                        app.branches = Some(BranchIterator::new(branches));
+                        app.branches = Branches::new(branches);
                     }
                     KeyCode::Char('q') => {
                         app.current_screen = CurrentScreen::Exiting;
@@ -96,44 +96,48 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                     _ => {}
                 },
                 CurrentScreen::ListingBranches
-                    if !app.searching && key.kind == KeyEventKind::Press =>
+                    if !app.in_search_bar && key.kind == KeyEventKind::Press =>
                 {
                     match key.code {
-                        KeyCode::Enter => {
-                            if let Some(branches) = &mut app.branches {
-                                branches.checkout_current().unwrap_or_else(|err| {
-                                    if let Some(errors) = &mut app.errors {
-                                        errors.push(err);
-                                    } else {
-                                        app.errors = Some(vec![err]);
-                                    }
+                        KeyCode::Enter => app
+                            .branches
+                            .checkout_current()
+                            .unwrap_or_else(|err| {
+                                if app.errors.len() > 0 {
+                                    app.errors.push(err);
+                                } else {
+                                    app.errors = vec![err];
+                                }
 
-                                    app.error_modal = Some(Modal::Open);
-                                    app.list_branches_modal = None;
-                                    app.current_screen = CurrentScreen::Errors;
-                                })
-                            }
-                        }
+                                app.error_modal = Modal::Open;
+                                app.list_branches_modal = Modal::Closed;
+                                app.current_screen = CurrentScreen::Errors;
+                            }),
                         KeyCode::Esc | KeyCode::Char('q') => {
                             app.current_screen = CurrentScreen::Main;
-                            app.list_branches_modal = None;
+                            app.list_branches_modal = Modal::Closed;
+                            app.branches.reset_index();
                         }
 
                         KeyCode::Char(value) => match value {
                             'j' => {
-                                if let Some(branches) = &mut app.branches {
-                                    if branches.is_last() {
-                                        app.searching = true;
-                                    }
-                                    branches.next();
+                                if app.branches.filtered(&app.search_query).is_last() {
+                                    app.in_search_bar = true;
+                                }
+                                if let Some(next) = app.branches.filtered(&app.search_query).next()
+                                {
+                                    app.branches.select_from_index(next.index);
+                                } else {
+                                    println!("wtf yo");
                                 }
                             }
                             'k' => {
-                                if let Some(branches) = &mut app.branches {
-                                    if branches.is_first() {
-                                        app.searching = true;
-                                    }
-                                    branches.prev();
+                                if app.branches.filtered(&app.search_query).is_first() {
+                                    app.in_search_bar = true;
+                                }
+                                if let Some(prev) = app.branches.filtered(&app.search_query).prev()
+                                {
+                                    app.branches.select_from_index(prev.index);
                                 }
                             }
                             c => {
@@ -141,56 +145,50 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                             }
                         },
                         KeyCode::Tab => {
-                            if let Some(branches) = &mut app.branches {
-                                if branches.is_last() {
-                                    app.searching = true;
-                                }
+                            if app.branches.filtered(&app.search_query).is_last() {
+                                app.in_search_bar = true;
                             }
                         }
                         KeyCode::BackTab => {
-                            if let Some(branches) = &mut app.branches {
-                                if branches.is_first() {
-                                    app.searching = true;
-                                }
+                            if app.branches.filtered(&app.search_query).is_first() {
+                                app.in_search_bar = true;
                             }
                         }
                         _ => {}
                     }
                 }
                 CurrentScreen::ListingBranches
-                    if app.searching && key.kind == KeyEventKind::Press =>
+                    if app.in_search_bar && key.kind == KeyEventKind::Press =>
                 {
                     match key.code {
-                        KeyCode::Backspace => match &app.search_query {
-                            Some(query) => {
-                                if query.len() > 0 {
-                                    app.search_query = Some(remove_last_char(&query).to_string());
-                                }
+                        KeyCode::Backspace => {
+                            if !app.search_query.is_empty() {
+                                app.search_query = remove_last_char(&app.search_query).to_string();
                             }
-                            _ => {}
-                        },
+                        }
                         KeyCode::Esc => {
-                            app.searching = false;
-                            if let Some(branches) = &mut app.branches {
-                                if !branches.is_first() {
-                                    branches.next();
+                            app.in_search_bar = false;
+
+                            app.branches.reset_index();
+
+                            if !app.branches.filtered(&app.search_query).is_first() {
+                                if let Some(next) = app.branches.filtered(&app.search_query).next()
+                                {
+                                    app.branches.select_from_index(next.index);
                                 }
                             }
                         }
-                        KeyCode::Char(value) => match &app.search_query {
-                            Some(query) => {
-                                app.search_query = Some(format!("{}{}", query, value));
-                            }
-                            None => app.search_query = Some(value.to_string()),
-                        },
+                        KeyCode::Char(value) => {
+                            app.search_query = format!("{}{}", app.search_query, value);
+                        }
                         _ => {}
                     }
                 }
                 CurrentScreen::Errors if key.kind == KeyEventKind::Press => match key.code {
                     KeyCode::Esc | KeyCode::Char('q') => {
                         app.current_screen = CurrentScreen::Main;
-                        app.error_modal = None;
-                        app.errors = None;
+                        app.error_modal = Modal::Closed;
+                        app.errors = Vec::new();
                     }
                     _ => {}
                 },
