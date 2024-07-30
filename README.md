@@ -16,6 +16,7 @@ https://github.com/benzend/gitui/assets/70179217/e72c5199-b685-4720-b14e-0a87791
 - [ ] Pull updates
 - [ ] Check for updates
 - [ ] Mergetools
+- [ ] List and use git commmands
 
 ## Tech
 
