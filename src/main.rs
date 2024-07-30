@@ -127,8 +127,6 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                                 if let Some(next) = app.branches.filtered(&app.search_query).next()
                                 {
                                     app.branches.select_from_index(next.index);
-                                } else {
-                                    println!("wtf yo");
                                 }
                             }
                             'k' => {
