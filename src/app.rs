@@ -1,11 +1,16 @@
 pub struct App {
     pub current_screen: CurrentScreen, // the current screen the user is looking at, and will later determine what is rendered.
     pub list_branches_modal: Modal,
+    pub list_commands_modal: Modal,
+    pub list_branch_commands_modal: Modal,
     pub in_search_bar: bool,
     pub search_query: String,
     pub error_modal: Modal,
     pub errors: Vec<GituiError>,
     pub branches: Branches,
+    pub command_chain: Vec<Command>,
+    pub commands: Vec<Command>,
+    pub branch_commands: Vec<BranchCommand>
 }
 
 impl App {
@@ -13,11 +18,16 @@ impl App {
         App {
             current_screen: CurrentScreen::Main,
             list_branches_modal: Modal::Closed,
+            list_commands_modal: Modal::Closed,
+            list_branch_commands_modal: Modal::Closed,
             in_search_bar: false,
             search_query: String::from(""),
             error_modal: Modal::Closed,
             errors: Vec::new(),
             branches: Branches::new(vec![]),
+            command_chain: Vec::new(),
+            commands: vec![Command::Branch, Command::Fetch],
+            branch_commands: vec![BranchCommand::Checkout, BranchCommand::Switch, BranchCommand::FastForward]
         }
     }
 }
@@ -27,6 +37,17 @@ pub enum CurrentScreen {
     ListingBranches,
     Errors,
     Exiting,
+}
+
+pub enum Command {
+    Branch,
+    Fetch
+}
+
+pub enum BranchCommand {
+    Checkout,
+    Switch,
+    FastForward,
 }
 
 pub enum Modal {
@@ -130,7 +151,7 @@ impl From<&IndexedBranch> for IndexedBranch {
 
 pub struct Branches {
     values: Vec<IndexedBranch>,
-    index: usize
+    curr_index: usize
 }
 
 impl Branches {
@@ -142,7 +163,7 @@ impl Branches {
 
         Self {
             values: indexed,
-            index: 0
+            curr_index: 0
         }
     }
 
@@ -151,11 +172,11 @@ impl Branches {
     }
 
     pub fn get_index(&self) -> usize {
-        self.index
+        self.curr_index
     }
 
     pub fn reset_index(&mut self) {
-        self.index = 0;
+        self.curr_index = 0;
     }
 
     pub fn filtered(&self, query: &str) -> BranchIterator {
@@ -169,12 +190,12 @@ impl Branches {
                 branches.push(IndexedBranch::from(b));
             }
         }
-        BranchIterator::new(branches, Some(self.index))
+        BranchIterator::new(branches, Some(self.get_index()))
     }
 
     pub fn select_from_index(&mut self, index: usize) -> &IndexedBranch {
-        self.index = index;
-        &self.values[self.index]
+        self.curr_index = index;
+        &self.values[self.curr_index]
     }
 
     pub fn get_currently_checkedout_name(&self) -> Option<String> {
@@ -186,9 +207,9 @@ impl Branches {
     }
 
     pub fn checkout_current(&mut self) -> Result<(), GituiError> {
-        self.values[self.index].checkout()?;
+        self.values[self.curr_index].checkout()?;
 
-        let current_branch_name = &self.values[self.index].name;
+        let current_branch_name = &self.values[self.curr_index].name;
 
         self.uncheckout_all_except(current_branch_name.to_string());
 
@@ -207,14 +228,14 @@ impl Branches {
 
 pub struct BranchIterator {
     pub values: Vec<IndexedBranch>,
-    pub index: usize,
+    pub curr_index: usize,
 }
 
 impl BranchIterator {
     pub fn new(branches: Vec<IndexedBranch>, index: Option<usize>) -> Self {
         BranchIterator {
             values: branches,
-            index: index.unwrap_or(0),
+            curr_index: index.unwrap_or(0),
         }
     }
 
@@ -222,40 +243,45 @@ impl BranchIterator {
         if self.is_empty() {
             return None;
         }
-        if self.is_last() {
-            self.index = 0;
+        if self.curr_index_invalid() || self.is_last() {
+            self.curr_index = 0;
         } else {
-            self.index += 1;
+            self.curr_index += 1;
         }
 
-        Some(&self.values[self.index])
+        Some(&self.values[self.curr_index])
     }
 
     pub fn prev(&mut self) -> Option<&IndexedBranch> {
         if self.is_empty() {
             return None;
         }
-        if self.is_first() {
-            self.index = self.values.len() - 1;
+        if self.curr_index_invalid() || self.is_first() {
+            self.curr_index = self.values.len() - 1;
         } else {
-            self.index -= 1;
+            self.curr_index -= 1;
         }
 
-        Some(&self.values[self.index])
+        Some(&self.values[self.curr_index])
     }
 
     pub fn is_last(&self) -> bool {
         if self.is_empty() {
             return true;
         }
-        self.index == self.values.len() - 1
+        self.curr_index == self.values.len() - 1
+    }
+
+    fn curr_index_invalid(&self) -> bool {
+        self.curr_index >= self.values.len()
     }
 
     pub fn is_first(&self) -> bool {
-        self.index == 0
+        self.curr_index == 0
     }
 
     pub fn is_empty(&self) -> bool {
         self.values.len() == 0
     }
+
 }

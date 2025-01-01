@@ -5,6 +5,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use itertools::Itertools;
 use ratatui::{
     backend::{Backend, CrosstermBackend},
     Terminal,
@@ -99,20 +100,17 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                     if !app.in_search_bar && key.kind == KeyEventKind::Press =>
                 {
                     match key.code {
-                        KeyCode::Enter => app
-                            .branches
-                            .checkout_current()
-                            .unwrap_or_else(|err| {
-                                if app.errors.len() > 0 {
-                                    app.errors.push(err);
-                                } else {
-                                    app.errors = vec![err];
-                                }
+                        KeyCode::Enter => app.branches.checkout_current().unwrap_or_else(|err| {
+                            if app.errors.len() > 0 {
+                                app.errors.push(err);
+                            } else {
+                                app.errors = vec![err];
+                            }
 
-                                app.error_modal = Modal::Open;
-                                app.list_branches_modal = Modal::Closed;
-                                app.current_screen = CurrentScreen::Errors;
-                            }),
+                            app.error_modal = Modal::Open;
+                            app.list_branches_modal = Modal::Closed;
+                            app.current_screen = CurrentScreen::Errors;
+                        }),
                         KeyCode::Esc | KeyCode::Char('q') => {
                             app.current_screen = CurrentScreen::Main;
                             app.list_branches_modal = Modal::Closed;
@@ -121,37 +119,26 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
 
                         KeyCode::Char(value) => match value {
                             'j' => {
-                                if app.branches.filtered(&app.search_query).is_last() {
-                                    app.in_search_bar = true;
-                                }
                                 if let Some(next) = app.branches.filtered(&app.search_query).next()
                                 {
                                     app.branches.select_from_index(next.index);
                                 }
                             }
                             'k' => {
-                                if app.branches.filtered(&app.search_query).is_first() {
-                                    app.in_search_bar = true;
-                                }
                                 if let Some(prev) = app.branches.filtered(&app.search_query).prev()
                                 {
                                     app.branches.select_from_index(prev.index);
                                 }
                             }
+                            'i' => {
+                                app.in_search_bar = true;
+                            }
                             c => {
                                 print!("{}", c)
                             }
                         },
-                        KeyCode::Tab => {
-                            if app.branches.filtered(&app.search_query).is_last() {
-                                app.in_search_bar = true;
-                            }
-                        }
-                        KeyCode::BackTab => {
-                            if app.branches.filtered(&app.search_query).is_first() {
-                                app.in_search_bar = true;
-                            }
-                        }
+                        KeyCode::Tab => {}
+                        KeyCode::BackTab => {}
                         _ => {}
                     }
                 }
