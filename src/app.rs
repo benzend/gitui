@@ -1,3 +1,6 @@
+use itertools::Itertools;
+use ratatui::text::Text;
+
 pub struct App {
     pub current_screen: CurrentScreen, // the current screen the user is looking at, and will later determine what is rendered.
     pub list_branches_modal: Modal,
@@ -132,10 +135,14 @@ impl IndexedBranch {
 
     pub fn get_display_name(&self) -> String {
         if self.is_checked_out {
-            format!("* {}", self.name)
+            format!("* {}", self.get_name())
         } else {
-            self.name.to_string()
+            self.get_name()
         }
+    }
+
+    pub fn get_name(&self) -> String {
+        self.name.to_string()
     }
 
     pub fn set_is_checked_out(&mut self, value: bool) {
@@ -179,7 +186,7 @@ impl Branches {
         self.curr_index = 0;
     }
 
-    pub fn filtered(&self, query: &str) -> BranchIterator {
+    pub fn filtered(&self, query: &str) -> Branches {
         let mut branches = Vec::new();
         for b in self.values.iter() {
             if query != "" {
@@ -190,7 +197,10 @@ impl Branches {
                 branches.push(IndexedBranch::from(b));
             }
         }
-        BranchIterator::new(branches, Some(self.get_index()))
+        Branches {
+            values: branches,
+            curr_index: self.get_index(),
+        }
     }
 
     pub fn select_from_index(&mut self, index: usize) -> &IndexedBranch {
@@ -226,62 +236,83 @@ impl Branches {
 
 }
 
-pub struct BranchIterator {
-    pub values: Vec<IndexedBranch>,
-    pub curr_index: usize,
+impl<S, I> From<&Branches> for Scrollable<S, I>
+where
+    S: Into<Text<'static>>,
+    I: Into<Index>,
+    Vec<(S, I)>: FromIterator<(Text<'static>, Index)>
+{
+    fn from(branches: &Branches) -> Scrollable<S, I> {
+        Scrollable::new(branches.values.iter().map(|b| (Text::from(b.get_display_name()), Index(b.index))).collect(), Some(branches.curr_index))
+    }
 }
 
-impl BranchIterator {
-    pub fn new(branches: Vec<IndexedBranch>, index: Option<usize>) -> Self {
-        BranchIterator {
-            values: branches,
-            curr_index: index.unwrap_or(0),
+pub struct Scrollable<S, I>
+where
+    S: Into<Text<'static>>,
+    I: Into<Index>
+{
+    items: Vec<(S, I)>,
+    selection: usize
+}
+
+pub struct Index(pub usize);
+
+impl<S, I> Scrollable<S, I>
+where
+    S: Into<Text<'static>>,
+    I: Into<Index>
+{
+    pub fn new(items: Vec<(S, I)>, index: Option<usize>) -> Self {
+        Self {
+            items,
+            selection: index.unwrap_or(0),
         }
     }
 
-    pub fn next(&mut self) -> Option<&IndexedBranch> {
+    pub fn next(&mut self) -> Option<&(S, I)> {
         if self.is_empty() {
             return None;
         }
-        if self.curr_index_invalid() || self.is_last() {
-            self.curr_index = 0;
+        if self.selection_invalid() || self.is_last() {
+            self.selection = 0;
         } else {
-            self.curr_index += 1;
+            self.selection += 1;
         }
 
-        Some(&self.values[self.curr_index])
+        Some(&self.items[self.selection])
     }
 
-    pub fn prev(&mut self) -> Option<&IndexedBranch> {
+    pub fn prev(&mut self) -> Option<&(S, I)> {
         if self.is_empty() {
             return None;
         }
-        if self.curr_index_invalid() || self.is_first() {
-            self.curr_index = self.values.len() - 1;
+        if self.selection_invalid() || self.is_first() {
+            self.selection = self.items.len() - 1;
         } else {
-            self.curr_index -= 1;
+            self.selection -= 1;
         }
 
-        Some(&self.values[self.curr_index])
+        Some(&self.items[self.selection])
     }
 
     pub fn is_last(&self) -> bool {
         if self.is_empty() {
             return true;
         }
-        self.curr_index == self.values.len() - 1
+        self.selection == self.items.len() - 1
     }
 
-    fn curr_index_invalid(&self) -> bool {
-        self.curr_index >= self.values.len()
+    fn selection_invalid(&self) -> bool {
+        self.selection >= self.items.len()
     }
 
     pub fn is_first(&self) -> bool {
-        self.curr_index == 0
+        self.selection == 0
     }
 
     pub fn is_empty(&self) -> bool {
-        self.values.len() == 0
+        self.items.len() == 0
     }
 
 }

@@ -1,5 +1,6 @@
 use std::{error::Error, io};
 
+use app::Index;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
     execute,
@@ -14,7 +15,7 @@ use ratatui::{
 mod app;
 mod ui;
 use crate::{
-    app::{App, Branch, Branches, CurrentScreen, Modal},
+    app::{App, Branch, Branches, CurrentScreen, Modal, Scrollable},
     ui::ui,
 };
 
@@ -119,15 +120,15 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
 
                         KeyCode::Char(value) => match value {
                             'j' => {
-                                if let Some(next) = app.branches.filtered(&app.search_query).next()
+                                if let Some((_, Index(i))) = Scrollable::from(&app.branches.filtered(&app.search_query)).next()
                                 {
-                                    app.branches.select_from_index(next.index);
+                                    app.branches.select_from_index(*i);
                                 }
                             }
                             'k' => {
-                                if let Some(prev) = app.branches.filtered(&app.search_query).prev()
+                                if let Some((_, Index(i))) = Scrollable::from(&app.branches.filtered(&app.search_query)).prev()
                                 {
-                                    app.branches.select_from_index(prev.index);
+                                    app.branches.select_from_index(*i);
                                 }
                             }
                             'i' => {
@@ -156,10 +157,12 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
 
                             app.branches.reset_index();
 
-                            if !app.branches.filtered(&app.search_query).is_first() {
-                                if let Some(next) = app.branches.filtered(&app.search_query).next()
+                            let mut scrollable = Scrollable::from(&app.branches.filtered(&app.search_query));
+
+                            if !scrollable.is_first() {
+                                if let Some((_, Index(i))) = scrollable.next()
                                 {
-                                    app.branches.select_from_index(next.index);
+                                    app.branches.select_from_index(*i);
                                 }
                             }
                         }
