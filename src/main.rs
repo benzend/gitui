@@ -1,12 +1,11 @@
 use std::{error::Error, io};
 
-use app::Index;
+use app::{BranchCommand, Index};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use itertools::Itertools;
 use ratatui::{
     backend::{Backend, CrosstermBackend},
     Terminal,
@@ -15,7 +14,7 @@ use ratatui::{
 mod app;
 mod ui;
 use crate::{
-    app::{App, Branch, Branches, CurrentScreen, Modal, Scrollable},
+    app::{App, Branch, Branches, Command, CurrentScreen, Modal, Scrollable},
     ui::ui,
 };
 
@@ -60,7 +59,6 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                 CurrentScreen::Main => match key.code {
                     KeyCode::Char('b') => {
                         app.current_screen = CurrentScreen::ListingBranches;
-                        app.list_branches_modal = Modal::Open;
                         app.in_search_bar = true;
 
                         let stdout = std::process::Command::new("git")
@@ -83,6 +81,10 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
 
                         app.branches = Branches::new(branches);
                     }
+                    KeyCode::Char('c') => {
+                        app.current_screen = CurrentScreen::ListingCommands;
+                        app.in_search_bar = true;
+                    }
                     KeyCode::Char('q') => {
                         app.current_screen = CurrentScreen::Exiting;
                     }
@@ -97,11 +99,121 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                     }
                     _ => {}
                 },
-                CurrentScreen::ListingBranches
+                CurrentScreen::ListingCommands
+                    if app.in_search_bar && key.kind == KeyEventKind::Press =>
+                {
+                    match key.code {
+                        KeyCode::Backspace => {
+                            if !app.search_query.is_empty() {
+                                app.search_query = remove_last_char(&app.search_query).to_string();
+                            }
+                        }
+                        KeyCode::Esc => {
+                            app.in_search_bar = false;
+
+                            app.commands.reset_index();
+
+                            let mut filtered = app.commands.filtered(&app.search_query);
+
+                            if !filtered.is_first() {
+                                if let Some((_, Index(i))) = filtered.next() {
+                                    app.commands.select_from_index(*i);
+                                }
+                            }
+                        }
+                        KeyCode::Char(value) => {
+                            app.search_query = format!("{}{}", app.search_query, value);
+                        }
+                        _ => {}
+                    }
+                }
+                CurrentScreen::ListingCommands
                     if !app.in_search_bar && key.kind == KeyEventKind::Press =>
                 {
                     match key.code {
-                        KeyCode::Enter => app.branches.checkout_current().unwrap_or_else(|err| {
+                        KeyCode::Enter => {
+                            Command::from(app.commands.get_current().unwrap().0.as_str())
+                                .next_step(app)
+                                .unwrap_or_else(|err| {
+                                    if app.errors.len() > 0 {
+                                        app.errors.push(err);
+                                    } else {
+                                        app.errors = vec![err];
+                                    }
+
+                                    app.error_modal = Modal::Open;
+                                    app.current_screen = CurrentScreen::Errors;
+                                })
+                        }
+                        KeyCode::Esc | KeyCode::Char('q') => {
+                            app.current_screen = CurrentScreen::Main;
+                            app.commands.reset_index();
+                        }
+
+                        KeyCode::Char(value) => match value {
+                            'j' => {
+                                if let Some((_, Index(i))) =
+                                    &app.commands.filtered(&app.search_query).next()
+                                {
+                                    app.commands.select_from_index(*i);
+                                }
+                            }
+                            'k' => {
+                                if let Some((_, Index(i))) =
+                                    &app.commands.filtered(&app.search_query).prev()
+                                {
+                                    app.commands.select_from_index(*i);
+                                }
+                            }
+                            'i' => {
+                                app.in_search_bar = true;
+                            }
+                            c => {
+                                print!("{}", c)
+                            }
+                        },
+                        KeyCode::Tab => {}
+                        KeyCode::BackTab => {}
+                        _ => {}
+                    }
+                }
+                CurrentScreen::ListingBranchCommands
+                    if app.in_search_bar && key.kind == KeyEventKind::Press =>
+                {
+                    match key.code {
+                        KeyCode::Backspace => {
+                            if !app.search_query.is_empty() {
+                                app.search_query = remove_last_char(&app.search_query).to_string();
+                            }
+                        }
+                        KeyCode::Esc => {
+                            app.in_search_bar = false;
+
+                            app.branch_commands.reset_index();
+
+                            let mut filtered = app.branch_commands.filtered(&app.search_query);
+
+                            if !filtered.is_first() {
+                                if let Some((_, Index(i))) = filtered.next() {
+                                    app.branch_commands.select_from_index(*i);
+                                }
+                            }
+                        }
+                        KeyCode::Char(value) => {
+                            app.search_query = format!("{}{}", app.search_query, value);
+                        }
+                        _ => {}
+                    }
+                }
+                CurrentScreen::ListingBranchCommands
+                    if !app.in_search_bar && key.kind == KeyEventKind::Press =>
+                {
+                    match key.code {
+                        KeyCode::Enter => BranchCommand::from(
+                            app.branch_commands.get_current().unwrap().0.as_str(),
+                        )
+                        .next_step(app)
+                        .unwrap_or_else(|err| {
                             if app.errors.len() > 0 {
                                 app.errors.push(err);
                             } else {
@@ -109,24 +221,87 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                             }
 
                             app.error_modal = Modal::Open;
-                            app.list_branches_modal = Modal::Closed;
                             app.current_screen = CurrentScreen::Errors;
                         }),
                         KeyCode::Esc | KeyCode::Char('q') => {
                             app.current_screen = CurrentScreen::Main;
-                            app.list_branches_modal = Modal::Closed;
+                            app.branch_commands.reset_index();
+                        }
+
+                        KeyCode::Char(value) => match value {
+                            'j' => {
+                                if let Some((_, Index(i))) =
+                                    &app.branch_commands.filtered(&app.search_query).next()
+                                {
+                                    app.branch_commands.select_from_index(*i);
+                                }
+                            }
+                            'k' => {
+                                if let Some((_, Index(i))) =
+                                    &app.branch_commands.filtered(&app.search_query).prev()
+                                {
+                                    app.branch_commands.select_from_index(*i);
+                                }
+                            }
+                            'i' => {
+                                app.in_search_bar = true;
+                            }
+                            c => {
+                                print!("{}", c)
+                            }
+                        },
+                        KeyCode::Tab => {}
+                        KeyCode::BackTab => {}
+                        _ => {}
+                    }
+                }
+
+                CurrentScreen::ListingBranches
+                    if !app.in_search_bar && key.kind == KeyEventKind::Press =>
+                {
+                    match key.code {
+                        KeyCode::Enter => match &app.selected_branch_command {
+                            Some(BranchCommand::Switch) => {
+                                app.branches.switch_current().unwrap_or_else(|err| {
+                                    if app.errors.len() > 0 {
+                                        app.errors.push(err);
+                                    } else {
+                                        app.errors = vec![err];
+                                    }
+
+                                    app.error_modal = Modal::Open;
+                                    app.current_screen = CurrentScreen::Errors;
+                                })
+                            }
+                            None => app.branches.switch_current().unwrap_or_else(|err| {
+                                if app.errors.len() > 0 {
+                                    app.errors.push(err);
+                                } else {
+                                    app.errors = vec![err];
+                                }
+
+                                app.error_modal = Modal::Open;
+                                app.current_screen = CurrentScreen::Errors;
+                            }),
+                        },
+                        KeyCode::Esc | KeyCode::Char('q') => {
+                            app.current_screen = CurrentScreen::Main;
                             app.branches.reset_index();
                         }
 
                         KeyCode::Char(value) => match value {
                             'j' => {
-                                if let Some((_, Index(i))) = Scrollable::from(&app.branches.filtered(&app.search_query)).next()
+                                if let Some((_, Index(i))) =
+                                    Scrollable::from(&app.branches.filtered(&app.search_query))
+                                        .next()
                                 {
                                     app.branches.select_from_index(*i);
                                 }
                             }
                             'k' => {
-                                if let Some((_, Index(i))) = Scrollable::from(&app.branches.filtered(&app.search_query)).prev()
+                                if let Some((_, Index(i))) =
+                                    Scrollable::from(&app.branches.filtered(&app.search_query))
+                                        .prev()
                                 {
                                     app.branches.select_from_index(*i);
                                 }
@@ -157,11 +332,11 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
 
                             app.branches.reset_index();
 
-                            let mut scrollable = Scrollable::from(&app.branches.filtered(&app.search_query));
+                            let mut scrollable =
+                                Scrollable::from(&app.branches.filtered(&app.search_query));
 
                             if !scrollable.is_first() {
-                                if let Some((_, Index(i))) = scrollable.next()
-                                {
+                                if let Some((_, Index(i))) = scrollable.next() {
                                     app.branches.select_from_index(*i);
                                 }
                             }

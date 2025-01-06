@@ -1,36 +1,40 @@
-use itertools::Itertools;
-use ratatui::text::Text;
-
 pub struct App {
     pub current_screen: CurrentScreen, // the current screen the user is looking at, and will later determine what is rendered.
-    pub list_branches_modal: Modal,
-    pub list_commands_modal: Modal,
-    pub list_branch_commands_modal: Modal,
     pub in_search_bar: bool,
     pub search_query: String,
     pub error_modal: Modal,
     pub errors: Vec<GituiError>,
     pub branches: Branches,
-    pub command_chain: Vec<Command>,
-    pub commands: Vec<Command>,
-    pub branch_commands: Vec<BranchCommand>
+    pub selected_command: Option<Command>,
+    pub selected_branch_command: Option<BranchCommand>,
+    pub commands: Scrollable,
+    pub branch_commands: Scrollable,
 }
 
 impl App {
     pub fn new() -> App {
         App {
             current_screen: CurrentScreen::Main,
-            list_branches_modal: Modal::Closed,
-            list_commands_modal: Modal::Closed,
-            list_branch_commands_modal: Modal::Closed,
             in_search_bar: false,
             search_query: String::from(""),
             error_modal: Modal::Closed,
             errors: Vec::new(),
             branches: Branches::new(vec![]),
-            command_chain: Vec::new(),
-            commands: vec![Command::Branch, Command::Fetch],
-            branch_commands: vec![BranchCommand::Checkout, BranchCommand::Switch, BranchCommand::FastForward]
+            selected_command: None,
+            selected_branch_command: None,
+            commands: Scrollable::new(
+                vec![
+                    (Command::Branch.to_string(), Index(0)),
+                    (Command::FetchAll.to_string(), Index(1)),
+                ],
+                Some(0),
+            ),
+            branch_commands: Scrollable::new(
+                vec![
+                    (BranchCommand::Switch.to_string(), Index(0)),
+                ],
+                Some(0),
+            ),
         }
     }
 }
@@ -38,19 +42,122 @@ impl App {
 pub enum CurrentScreen {
     Main,
     ListingBranches,
+    ListingCommands,
+    ListingBranchCommands,
     Errors,
     Exiting,
 }
 
 pub enum Command {
     Branch,
-    Fetch
+    FetchAll,
+}
+
+impl Command {
+    pub fn to_string(&self) -> String {
+        String::from(match self {
+            Command::Branch => "Branch",
+            Command::FetchAll => "Fetch All",
+        })
+    }
+
+    pub fn next_step(&self, app: &mut App) -> Result<(), GituiError> {
+        match self {
+            Command::FetchAll => {
+                let stdout = std::process::Command::new("git")
+                    .arg("fetch")
+                    .arg("--all")
+                    .output()
+                    .expect("couldnt fetch")
+                    .stdout;
+
+                let msg = String::from_utf8(stdout).expect("couldn't parse output");
+
+                if !msg.contains("error:") {
+                    Ok(())
+                } else {
+                    Err(GituiError::BranchCheckout(format!(
+                        "failed to checkout branch. output: {}",
+                        msg
+                    )))
+                }
+            }
+            Command::Branch => {
+                app.current_screen = CurrentScreen::ListingBranchCommands;
+                app.selected_command = Some(Command::Branch);
+
+                Ok(())
+            }
+        }
+    }
+}
+
+pub fn get_branches() -> Vec<Branch> {
+    let stdout = std::process::Command::new("git")
+        .arg("branch")
+        .output()
+        .expect("to get git branches")
+        .stdout;
+
+    String::from_utf8(stdout)
+        .expect("couldnt parse stdout")
+        .split("\n")
+        .into_iter()
+        .filter(|b| b.len() > 0)
+        .map(|b| {
+            let is_checked_out = b.contains("* ");
+            let name = b.replace("* ", "");
+            Branch::new(&name.trim_start(), is_checked_out)
+        })
+        .collect()
+}
+
+impl BranchCommand {
+    pub fn next_step(&self, app: &mut App) -> Result<(), GituiError> {
+        match self {
+            BranchCommand::Switch => {
+                app.current_screen = CurrentScreen::ListingBranches;
+
+                app.branches = Branches::new(get_branches());
+
+                app.selected_branch_command = Some(BranchCommand::Switch);
+
+                Ok(())
+            }
+        }
+    }
+}
+
+impl From<&str> for Command {
+    fn from(value: &str) -> Self {
+        match value {
+            "Branch" => Command::Branch,
+            "Fetch All" => Command::FetchAll,
+            _ => panic!("{value} is not a valid command"),
+        }
+    }
+}
+
+
+impl From<&str> for BranchCommand {
+    fn from(value: &str) -> Self {
+        match value {
+            "Switch" => BranchCommand::Switch,
+            _ => panic!("{value} is not a valid command"),
+        }
+    }
 }
 
 pub enum BranchCommand {
-    Checkout,
     Switch,
-    FastForward,
+}
+
+impl BranchCommand {
+    pub fn to_string(&self) -> String {
+        String::from(match self {
+            BranchCommand::Switch => "Switch",
+        })
+    }
 }
 
 pub enum Modal {
@@ -103,21 +210,21 @@ impl IndexedBranch {
         Self {
             name: name.to_string(),
             is_checked_out,
-            index
+            index,
         }
     }
 
-    pub fn checkout(&mut self) -> Result<(), GituiError> {
+    pub fn switch(&mut self) -> Result<(), GituiError> {
         if self.is_checked_out {
             return Err(GituiError::BranchCheckout(
                 "branch is already checked out".to_string(),
             ));
         }
         let stdout = std::process::Command::new("git")
-            .arg("checkout")
+            .arg("switch")
             .arg(&self.name.trim())
             .output()
-            .expect("couldnt checkout branch")
+            .expect("couldnt switch branch")
             .stdout;
 
         let msg = String::from_utf8(stdout).expect("couldn't parse output");
@@ -127,7 +234,7 @@ impl IndexedBranch {
             Ok(())
         } else {
             Err(GituiError::BranchCheckout(format!(
-                "failed to checkout branch. output: {}",
+                "failed to switch branch. output: {}",
                 msg
             )))
         }
@@ -158,7 +265,7 @@ impl From<&IndexedBranch> for IndexedBranch {
 
 pub struct Branches {
     values: Vec<IndexedBranch>,
-    curr_index: usize
+    curr_index: usize,
 }
 
 impl Branches {
@@ -170,7 +277,7 @@ impl Branches {
 
         Self {
             values: indexed,
-            curr_index: 0
+            curr_index: 0,
         }
     }
 
@@ -216,8 +323,8 @@ impl Branches {
         }
     }
 
-    pub fn checkout_current(&mut self) -> Result<(), GituiError> {
-        self.values[self.curr_index].checkout()?;
+    pub fn switch_current(&mut self) -> Result<(), GituiError> {
+        self.values[self.curr_index].switch()?;
 
         let current_branch_name = &self.values[self.curr_index].name;
 
@@ -233,44 +340,61 @@ impl Branches {
             }
         }
     }
-
 }
 
-impl<S, I> From<&Branches> for Scrollable<S, I>
-where
-    S: Into<Text<'static>>,
-    I: Into<Index>,
-    Vec<(S, I)>: FromIterator<(Text<'static>, Index)>
-{
-    fn from(branches: &Branches) -> Scrollable<S, I> {
-        Scrollable::new(branches.values.iter().map(|b| (Text::from(b.get_display_name()), Index(b.index))).collect(), Some(branches.curr_index))
+impl From<&Branches> for Scrollable {
+    fn from(branches: &Branches) -> Scrollable {
+        Scrollable::new(
+            branches
+                .values
+                .iter()
+                .map(|b| (String::from(b.get_display_name()), Index(b.index)))
+                .collect(),
+            Some(branches.curr_index),
+        )
     }
 }
 
-pub struct Scrollable<S, I>
-where
-    S: Into<Text<'static>>,
-    I: Into<Index>
-{
-    items: Vec<(S, I)>,
-    selection: usize
+pub struct Scrollable {
+    items: Vec<(String, Index)>,
+    selection: usize,
 }
 
 pub struct Index(pub usize);
 
-impl<S, I> Scrollable<S, I>
-where
-    S: Into<Text<'static>>,
-    I: Into<Index>
-{
-    pub fn new(items: Vec<(S, I)>, index: Option<usize>) -> Self {
+impl Scrollable {
+    pub fn new(items: Vec<(String, Index)>, index: Option<usize>) -> Self {
         Self {
             items,
             selection: index.unwrap_or(0),
         }
     }
 
-    pub fn next(&mut self) -> Option<&(S, I)> {
+    pub fn filtered(&self, query: &str) -> Scrollable {
+        let mut scrollable = Vec::new();
+        for item in self.items.iter() {
+            if query != "" {
+                if item.0.contains(query) {
+                    scrollable.push((String::from(&item.0), Index(item.1 .0)));
+                }
+            } else {
+                scrollable.push((String::from(&item.0), Index(item.1 .0)));
+            }
+        }
+        Scrollable::new(scrollable, Some(self.selection))
+    }
+
+    pub fn get_current(&self) -> Option<&(String, Index)> {
+        if self.is_empty() {
+            return None;
+        }
+        if self.selection_invalid() {
+            return None;
+        }
+        Some(&self.items[self.selection])
+    }
+
+    pub fn next(&mut self) -> Option<&(String, Index)> {
         if self.is_empty() {
             return None;
         }
@@ -283,7 +407,7 @@ where
         Some(&self.items[self.selection])
     }
 
-    pub fn prev(&mut self) -> Option<&(S, I)> {
+    pub fn prev(&mut self) -> Option<&(String, Index)> {
         if self.is_empty() {
             return None;
         }
@@ -315,4 +439,20 @@ where
         self.items.len() == 0
     }
 
+    pub fn reset_index(&mut self) {
+        self.selection = 0;
+    }
+
+    pub fn select_from_index(&mut self, index: usize) -> &(String, Index) {
+        self.selection = index;
+        &self.items[self.selection]
+    }
+
+    pub fn get_index(&self) -> usize {
+        self.selection
+    }
+
+    pub fn get_items(&self) -> &Vec<(String, Index)> {
+        &self.items
+    }
 }

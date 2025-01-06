@@ -32,6 +32,12 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         // The first half of the text
         match app.current_screen {
             CurrentScreen::Main => Span::styled("Normal Mode", Style::default().fg(Color::Green)),
+            CurrentScreen::ListingCommands => {
+                Span::styled("Listing commands", Style::default().fg(Color::Blue))
+            }
+            CurrentScreen::ListingBranchCommands => {
+                Span::styled("Listing branch commands", Style::default().fg(Color::Green))
+            }
             CurrentScreen::ListingBranches => {
                 Span::styled("Listing Branches", Style::default().fg(Color::Blue))
             }
@@ -43,20 +49,20 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         Span::styled(" | ", Style::default().fg(Color::White)),
         // The final section of the text, with hints on what the user is editing
         {
-            if matches!(&app.list_branches_modal, Modal::Open) {
-                let msg = if let Some(name) = app.branches.get_currently_checkedout_name() {
+            match (&app.current_screen, &app.error_modal) {
+                (CurrentScreen::ListingBranches, Modal::Closed) => {
+                    let msg = if let Some(name) = app.branches.get_currently_checkedout_name() {
                         format!("Current branch: {}", name)
-                } else {
-                    "No branch selected".to_string()
-                };
-                Span::styled(msg, Style::default().fg(Color::Green))
-            } else if matches!(app.error_modal, Modal::Open) {
-                Span::styled("Branches", Style::default().fg(Color::Green))
-            } else {
-                Span::styled(
+                    } else {
+                        "No branch selected".to_string()
+                    };
+                    Span::styled(msg, Style::default().fg(Color::Green))
+                }
+                (_, Modal::Open) => Span::styled("Error", Style::default().fg(Color::Red)),
+                _ => Span::styled(
                     "Waiting for something to happen",
                     Style::default().fg(Color::DarkGray),
-                )
+                ),
             }
         },
     ];
@@ -67,7 +73,15 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
     let current_keys_hint = {
         match app.current_screen {
             CurrentScreen::Main => Span::styled(
-                "(q) to quit / (b) to list branches",
+                "(q) to quit / (c) to list commands",
+                Style::default().fg(Color::Red),
+            ),
+            CurrentScreen::ListingCommands => Span::styled(
+                "(ESC|q) to cancel/(j/k) to navigate/(ENTER) to select",
+                Style::default().fg(Color::Red),
+            ),
+            CurrentScreen::ListingBranchCommands => Span::styled(
+                "(ESC|q) to cancel/(j/k) to navigate/(ENTER) to select",
                 Style::default().fg(Color::Red),
             ),
             CurrentScreen::ListingBranches => Span::styled(
@@ -95,77 +109,227 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
     f.render_widget(mode_footer, footer_chunks[0]);
     f.render_widget(key_notes_footer, footer_chunks[1]);
 
-    if matches!(app.list_branches_modal, Modal::Open) {
-        let popup_block = Block::default()
-            .title("Branches")
-            .borders(Borders::NONE)
-            .style(Style::default().bg(Color::DarkGray));
+    match app.current_screen {
+        CurrentScreen::ListingBranches => {
+            let popup_block = Block::default()
+                .title("Branches")
+                .borders(Borders::NONE)
+                .style(Style::default().bg(Color::DarkGray));
 
-        let area = centered_rect(60, 30, f.size());
-        f.render_widget(popup_block, area);
+            let area = centered_rect(60, 30, f.size());
+            f.render_widget(popup_block, area);
 
-        let popup_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
-            .split(area);
+            let popup_chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
+                .split(area);
 
-        let search_block = if !app.in_search_bar {
-            Block::default()
-                .title("Search")
-                .borders(Borders::ALL)
-                .style(Style::default().bg(Color::DarkGray))
-        } else {
-            Block::default()
-                .title("Searching... <esc> to exit")
-                .borders(Borders::ALL)
-                .style(Style::default().bg(Color::DarkGray))
-        };
-
-        f.render_widget(search_block, popup_chunks[0]);
-
-        let search_text = if !app.search_query.is_empty() {
-            Paragraph::new(app.search_query.to_string())
-        } else {
-            Paragraph::new("")
-        };
-
-        f.render_widget(search_text, popup_chunks[0].inner(&Margin::new(1, 1)));
-
-        let list_block = Block::default()
-            .borders(Borders::NONE)
-            .style(Style::default().bg(Color::DarkGray));
-
-        f.render_widget(list_block, popup_chunks[1]);
-
-        let mut list_items = Vec::<ListItem>::new();
-
-        for (i, branch) in app.branches.get_values().iter().enumerate() {
-            let style = if app.branches.get_index() == i && !app.in_search_bar {
-                Style::default().fg(Color::Red).bg(Color::White)
+            let search_block = if !app.in_search_bar {
+                Block::default()
+                    .title("Search")
+                    .borders(Borders::ALL)
+                    .style(Style::default().bg(Color::DarkGray))
             } else {
-                Style::default().fg(Color::Yellow)
-            };
-            let can_push = if !app.search_query.is_empty() {
-                branch.get_display_name().contains(app.search_query.as_str())
-            } else {
-                true
+                Block::default()
+                    .title("Searching... <esc> to exit")
+                    .borders(Borders::ALL)
+                    .style(Style::default().bg(Color::DarkGray))
             };
 
-            if can_push {
-                list_items.push(ListItem::new(Line::from(Span::styled(
-                    branch.get_display_name(),
-                    style,
-                ))));
+            f.render_widget(search_block, popup_chunks[0]);
+
+            let search_text = if !app.search_query.is_empty() {
+                Paragraph::new(app.search_query.to_string())
+            } else {
+                Paragraph::new("")
+            };
+
+            f.render_widget(search_text, popup_chunks[0].inner(&Margin::new(1, 1)));
+
+            let list_block = Block::default()
+                .borders(Borders::NONE)
+                .style(Style::default().bg(Color::DarkGray));
+
+            f.render_widget(list_block, popup_chunks[1]);
+
+            let mut list_items = Vec::<ListItem>::new();
+
+            for (i, branch) in app.branches.get_values().iter().enumerate() {
+                let style = if app.branches.get_index() == i && !app.in_search_bar {
+                    Style::default().fg(Color::Red).bg(Color::White)
+                } else {
+                    Style::default().fg(Color::Yellow)
+                };
+                let can_push = if !app.search_query.is_empty() {
+                    branch
+                        .get_display_name()
+                        .contains(app.search_query.as_str())
+                } else {
+                    true
+                };
+
+                if can_push {
+                    list_items.push(ListItem::new(Line::from(Span::styled(
+                        branch.get_display_name(),
+                        style,
+                    ))));
+                }
             }
+
+            let list_inner_block = Block::default()
+                .borders(Borders::NONE)
+                .style(Style::default().bg(Color::DarkGray));
+
+            let list = List::new(list_items).block(list_inner_block);
+
+            f.render_widget(list, popup_chunks[1].inner(&Margin::new(1, 1)));
+        }
+        CurrentScreen::ListingCommands => {
+            let popup_block = Block::default()
+                .title("Commands")
+                .borders(Borders::NONE)
+                .style(Style::default().bg(Color::DarkGray));
+
+            let area = centered_rect(60, 30, f.size());
+            f.render_widget(popup_block, area);
+
+            let popup_chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
+                .split(area);
+
+            let search_block = if !app.in_search_bar {
+                Block::default()
+                    .title("Search")
+                    .borders(Borders::ALL)
+                    .style(Style::default().bg(Color::DarkGray))
+            } else {
+                Block::default()
+                    .title("Searching... <esc> to exit")
+                    .borders(Borders::ALL)
+                    .style(Style::default().bg(Color::DarkGray))
+            };
+
+            f.render_widget(search_block, popup_chunks[0]);
+
+            let search_text = if !app.search_query.is_empty() {
+                Paragraph::new(app.search_query.to_string())
+            } else {
+                Paragraph::new("")
+            };
+
+            f.render_widget(search_text, popup_chunks[0].inner(&Margin::new(1, 1)));
+
+            let list_block = Block::default()
+                .borders(Borders::NONE)
+                .style(Style::default().bg(Color::DarkGray));
+
+            f.render_widget(list_block, popup_chunks[1]);
+
+            let mut list_items = Vec::<ListItem>::new();
+
+            for (i, command) in app.commands.get_items().iter().enumerate() {
+                let style = if app.commands.get_index() == i && !app.in_search_bar {
+                    Style::default().fg(Color::Red).bg(Color::White)
+                } else {
+                    Style::default().fg(Color::Yellow)
+                };
+                let can_push = if !app.search_query.is_empty() {
+                    command.0.contains(app.search_query.as_str())
+                } else {
+                    true
+                };
+
+                if can_push {
+                    list_items.push(ListItem::new(Line::from(Span::styled(
+                        command.0.to_string(),
+                        style,
+                    ))));
+                }
+            }
+
+            let list_inner_block = Block::default()
+                .borders(Borders::NONE)
+                .style(Style::default().bg(Color::DarkGray));
+
+            let list = List::new(list_items).block(list_inner_block);
+
+            f.render_widget(list, popup_chunks[1].inner(&Margin::new(1, 1)));
+        }
+        CurrentScreen::ListingBranchCommands => {
+            let popup_block = Block::default()
+                .title("Branch Commands")
+                .borders(Borders::NONE)
+                .style(Style::default().bg(Color::DarkGray));
+
+            let area = centered_rect(60, 30, f.size());
+            f.render_widget(popup_block, area);
+
+            let popup_chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
+                .split(area);
+
+            let search_block = if !app.in_search_bar {
+                Block::default()
+                    .title("Search")
+                    .borders(Borders::ALL)
+                    .style(Style::default().bg(Color::DarkGray))
+            } else {
+                Block::default()
+                    .title("Searching... <esc> to exit")
+                    .borders(Borders::ALL)
+                    .style(Style::default().bg(Color::DarkGray))
+            };
+
+            f.render_widget(search_block, popup_chunks[0]);
+
+            let search_text = if !app.search_query.is_empty() {
+                Paragraph::new(app.search_query.to_string())
+            } else {
+                Paragraph::new("")
+            };
+
+            f.render_widget(search_text, popup_chunks[0].inner(&Margin::new(1, 1)));
+
+            let list_block = Block::default()
+                .borders(Borders::NONE)
+                .style(Style::default().bg(Color::DarkGray));
+
+            f.render_widget(list_block, popup_chunks[1]);
+
+            let mut list_items = Vec::<ListItem>::new();
+
+            for (i, command) in app.branch_commands.get_items().iter().enumerate() {
+                let style = if app.branch_commands.get_index() == i && !app.in_search_bar {
+                    Style::default().fg(Color::Red).bg(Color::White)
+                } else {
+                    Style::default().fg(Color::Yellow)
+                };
+                let can_push = if !app.search_query.is_empty() {
+                    command.0.contains(app.search_query.as_str())
+                } else {
+                    true
+                };
+
+                if can_push {
+                    list_items.push(ListItem::new(Line::from(Span::styled(
+                        command.0.to_string(),
+                        style,
+                    ))));
+                }
+            }
+
+            let list_inner_block = Block::default()
+                .borders(Borders::NONE)
+                .style(Style::default().bg(Color::DarkGray));
+
+            let list = List::new(list_items).block(list_inner_block);
+
+            f.render_widget(list, popup_chunks[1].inner(&Margin::new(1, 1)));
         }
 
-        let list_inner_block = Block::default()
-            .borders(Borders::NONE)
-            .style(Style::default().bg(Color::DarkGray));
-
-        let list = List::new(list_items).block(list_inner_block);
-
-        f.render_widget(list, popup_chunks[1].inner(&Margin::new(1, 1)));
+        _ => (),
     }
 
     if matches!(app.error_modal, Modal::Open) {
