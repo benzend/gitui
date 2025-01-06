@@ -109,13 +109,20 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
     f.render_widget(mode_footer, footer_chunks[0]);
     f.render_widget(key_notes_footer, footer_chunks[1]);
 
-    match app.current_screen {
-        CurrentScreen::ListingBranches => {
-            let main_chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Min(3), Constraint::Percentage(100)])
-                .split(chunks[1]);
+    let main_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(3), Constraint::Percentage(100)])
+        .split(chunks[1]);
 
+    let list_block = Block::default()
+        .borders(Borders::NONE)
+        .style(Style::default());
+
+    f.render_widget(list_block, main_chunks[1]);
+
+    match app.current_screen {
+        CurrentScreen::Errors | CurrentScreen::Main => (),
+        _ => {
             let search_block = if !app.in_search_bar {
                 Block::default()
                     .title("Search")
@@ -137,13 +144,11 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
             };
 
             f.render_widget(search_text, main_chunks[0].inner(&Margin::new(1, 1)));
+        }
+    }
 
-            let list_block = Block::default()
-                .borders(Borders::NONE)
-                .style(Style::default());
-
-            f.render_widget(list_block, main_chunks[1]);
-
+    match app.current_screen {
+        CurrentScreen::ListingBranches => {
             let mut list_items = Vec::<ListItem>::new();
 
             for (i, branch) in app.branches.get_values().iter().enumerate() {
@@ -177,39 +182,6 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
             f.render_widget(list, main_chunks[1].inner(&Margin::new(1, 1)));
         }
         CurrentScreen::ListingCommands => {
-            let main_chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Min(3), Constraint::Percentage(100)])
-                .split(chunks[1]);
-
-            let search_block = if !app.in_search_bar {
-                Block::default()
-                    .title("Search")
-                    .borders(Borders::ALL)
-                    .style(Style::default())
-            } else {
-                Block::default()
-                    .title("Searching... <esc> to exit")
-                    .borders(Borders::ALL)
-                    .style(Style::default())
-            };
-
-            f.render_widget(search_block, main_chunks[0]);
-
-            let search_text = if !app.search_query.is_empty() {
-                Paragraph::new(app.search_query.to_string())
-            } else {
-                Paragraph::new("")
-            };
-
-            f.render_widget(search_text, main_chunks[0].inner(&Margin::new(1, 1)));
-
-            let list_block = Block::default()
-                .borders(Borders::NONE)
-                .style(Style::default());
-
-            f.render_widget(list_block, main_chunks[1]);
-
             let mut list_items = Vec::<ListItem>::new();
 
             for (i, command) in app.commands.get_items().iter().enumerate() {
@@ -241,39 +213,6 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
             f.render_widget(list, main_chunks[1].inner(&Margin::new(1, 1)));
         }
         CurrentScreen::ListingBranchCommands => {
-            let main_chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Min(3), Constraint::Percentage(100)])
-                .split(chunks[1]);
-
-            let search_block = if !app.in_search_bar {
-                Block::default()
-                    .title("Search")
-                    .borders(Borders::ALL)
-                    .style(Style::default())
-            } else {
-                Block::default()
-                    .title("Searching... <esc> to exit")
-                    .borders(Borders::ALL)
-                    .style(Style::default())
-            };
-
-            f.render_widget(search_block, main_chunks[0]);
-
-            let search_text = if !app.search_query.is_empty() {
-                Paragraph::new(app.search_query.to_string())
-            } else {
-                Paragraph::new("")
-            };
-
-            f.render_widget(search_text, main_chunks[0].inner(&Margin::new(1, 1)));
-
-            let list_block = Block::default()
-                .borders(Borders::NONE)
-                .style(Style::default());
-
-            f.render_widget(list_block, main_chunks[1]);
-
             let mut list_items = Vec::<ListItem>::new();
 
             for (i, command) in app.branch_commands.get_items().iter().enumerate() {
