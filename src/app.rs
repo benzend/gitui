@@ -76,8 +76,8 @@ impl Command {
                 if !msg.contains("error:") {
                     Ok(())
                 } else {
-                    Err(GituiError::BranchCheckout(format!(
-                        "failed to checkout branch. output: {}",
+                    Err(GituiError::FetchAll(format!(
+                        "failed to fetch all. output: {}",
                         msg
                     )))
                 }
@@ -166,13 +166,15 @@ pub enum Modal {
 }
 
 pub enum GituiError {
-    BranchCheckout(String),
+    BranchSwitch(String),
+    FetchAll(String),
 }
 
 impl std::fmt::Display for GituiError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            GituiError::BranchCheckout(s) => write!(f, "{}", s),
+            GituiError::BranchSwitch(s) => write!(f, "{}", s),
+            GituiError::FetchAll(s) => write!(f, "{}", s),
         }
     }
 }
@@ -216,7 +218,7 @@ impl IndexedBranch {
 
     pub fn switch(&mut self) -> Result<(), GituiError> {
         if self.is_checked_out {
-            return Err(GituiError::BranchCheckout(
+            return Err(GituiError::BranchSwitch(
                 "branch is already checked out".to_string(),
             ));
         }
@@ -233,7 +235,7 @@ impl IndexedBranch {
             self.is_checked_out = true;
             Ok(())
         } else {
-            Err(GituiError::BranchCheckout(format!(
+            Err(GituiError::BranchSwitch(format!(
                 "failed to switch branch. output: {}",
                 msg
             )))
