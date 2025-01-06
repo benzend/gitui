@@ -177,7 +177,7 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
             f.render_widget(list, main_chunks[1].inner(&Margin::new(1, 1)));
         }
         CurrentScreen::ListingCommands => {
-            let popup_chunks = Layout::default()
+            let main_chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([Constraint::Min(3), Constraint::Percentage(100)])
                 .split(chunks[1]);
@@ -194,7 +194,7 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                     .style(Style::default())
             };
 
-            f.render_widget(search_block, popup_chunks[0]);
+            f.render_widget(search_block, main_chunks[0]);
 
             let search_text = if !app.search_query.is_empty() {
                 Paragraph::new(app.search_query.to_string())
@@ -202,13 +202,13 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                 Paragraph::new("")
             };
 
-            f.render_widget(search_text, popup_chunks[0].inner(&Margin::new(1, 1)));
+            f.render_widget(search_text, main_chunks[0].inner(&Margin::new(1, 1)));
 
             let list_block = Block::default()
                 .borders(Borders::NONE)
                 .style(Style::default());
 
-            f.render_widget(list_block, popup_chunks[1]);
+            f.render_widget(list_block, main_chunks[1]);
 
             let mut list_items = Vec::<ListItem>::new();
 
@@ -238,10 +238,10 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
 
             let list = List::new(list_items).block(list_inner_block);
 
-            f.render_widget(list, popup_chunks[1].inner(&Margin::new(1, 1)));
+            f.render_widget(list, main_chunks[1].inner(&Margin::new(1, 1)));
         }
         CurrentScreen::ListingBranchCommands => {
-            let popup_chunks = Layout::default()
+            let main_chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([Constraint::Min(3), Constraint::Percentage(100)])
                 .split(chunks[1]);
@@ -258,7 +258,7 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                     .style(Style::default())
             };
 
-            f.render_widget(search_block, popup_chunks[0]);
+            f.render_widget(search_block, main_chunks[0]);
 
             let search_text = if !app.search_query.is_empty() {
                 Paragraph::new(app.search_query.to_string())
@@ -266,13 +266,13 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                 Paragraph::new("")
             };
 
-            f.render_widget(search_text, popup_chunks[0].inner(&Margin::new(1, 1)));
+            f.render_widget(search_text, main_chunks[0].inner(&Margin::new(1, 1)));
 
             let list_block = Block::default()
                 .borders(Borders::NONE)
                 .style(Style::default());
 
-            f.render_widget(list_block, popup_chunks[1]);
+            f.render_widget(list_block, main_chunks[1]);
 
             let mut list_items = Vec::<ListItem>::new();
 
@@ -302,7 +302,7 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
 
             let list = List::new(list_items).block(list_inner_block);
 
-            f.render_widget(list, popup_chunks[1].inner(&Margin::new(1, 1)));
+            f.render_widget(list, main_chunks[1].inner(&Margin::new(1, 1)));
         }
 
         _ => (),
