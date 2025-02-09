@@ -75,6 +75,7 @@ impl Command {
                 let msg = String::from_utf8(stdout).expect("couldn't parse output");
 
                 if !msg.contains("error:") {
+                    app.search_query = "".to_string();
                     Ok(())
                 } else {
                     Err(GituiError::FetchAll(format!(
@@ -121,6 +122,8 @@ impl BranchCommand {
 
                 app.branches = Branches::new(get_branches());
 
+                app.search_query = "".to_string();
+
                 app.selected_branch_command = Some(BranchCommand::Switch);
 
                 Ok(())
@@ -130,6 +133,8 @@ impl BranchCommand {
                 app.current_screen = CurrentScreen::ListingBranches;
 
                 app.branches = Branches::new(get_branches());
+
+                app.search_query = "".to_string();
 
                 app.selected_branch_command = Some(BranchCommand::Merge);
 
