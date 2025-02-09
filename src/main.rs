@@ -273,6 +273,19 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                                     app.current_screen = CurrentScreen::Errors;
                                 })
                             }
+                            Some(BranchCommand::Merge) => {
+                                app.branches.merge_current().unwrap_or_else(|err| {
+                                    if app.errors.len() > 0 {
+                                        app.errors.push(err);
+                                    } else {
+                                        app.errors = vec![err];
+                                    }
+
+                                    app.error_modal = Modal::Open;
+                                    app.current_screen = CurrentScreen::Errors;
+                                })
+                            }
+
                             None => app.branches.switch_current().unwrap_or_else(|err| {
                                 if app.errors.len() > 0 {
                                     app.errors.push(err);

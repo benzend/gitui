@@ -32,6 +32,7 @@ impl App {
             branch_commands: Scrollable::new(
                 vec![
                     (BranchCommand::Switch.to_string(), Index(0)),
+                    (BranchCommand::Merge.to_string(), Index(1)),
                 ],
                 Some(0),
             ),
@@ -124,6 +125,16 @@ impl BranchCommand {
 
                 Ok(())
             }
+
+            BranchCommand::Merge => {
+                app.current_screen = CurrentScreen::ListingBranches;
+
+                app.branches = Branches::new(get_branches());
+
+                app.selected_branch_command = Some(BranchCommand::Merge);
+
+                Ok(())
+            }
         }
     }
 }
@@ -143,6 +154,7 @@ impl From<&str> for BranchCommand {
     fn from(value: &str) -> Self {
         match value {
             "Switch" => BranchCommand::Switch,
+            "Merge" => BranchCommand::Merge,
             _ => panic!("{value} is not a valid command"),
         }
     }
@@ -150,12 +162,14 @@ impl From<&str> for BranchCommand {
 
 pub enum BranchCommand {
     Switch,
+    Merge,
 }
 
 impl BranchCommand {
     pub fn to_string(&self) -> String {
         String::from(match self {
             BranchCommand::Switch => "Switch",
+            BranchCommand::Merge => "Merge",
         })
     }
 }
@@ -168,6 +182,7 @@ pub enum Modal {
 pub enum GituiError {
     BranchSwitch(String),
     FetchAll(String),
+    BranchMerge(String),
 }
 
 impl std::fmt::Display for GituiError {
@@ -175,6 +190,7 @@ impl std::fmt::Display for GituiError {
         match self {
             GituiError::BranchSwitch(s) => write!(f, "{}", s),
             GituiError::FetchAll(s) => write!(f, "{}", s),
+            GituiError::BranchMerge(s) => write!(f, "{}", s),
         }
     }
 }
@@ -241,6 +257,32 @@ impl IndexedBranch {
             )))
         }
     }
+
+    pub fn merge(&mut self) -> Result<(), GituiError> {
+        if self.is_checked_out {
+            return Err(GituiError::BranchMerge(
+                "cant merge branch".to_string(),
+            ));
+        }
+        let stdout = std::process::Command::new("git")
+            .arg("merge")
+            .arg(&self.name.trim())
+            .output()
+            .expect("couldnt switch branch")
+            .stdout;
+
+        let msg = String::from_utf8(stdout).expect("couldn't parse output");
+
+        if !msg.contains("error:") {
+            Ok(())
+        } else {
+            Err(GituiError::BranchSwitch(format!(
+                "failed to merge branch. output: {}",
+                msg
+            )))
+        }
+    }
+
 
     pub fn get_display_name(&self) -> String {
         if self.is_checked_out {
@@ -331,6 +373,12 @@ impl Branches {
         let current_branch_name = &self.values[self.curr_index].name;
 
         self.uncheckout_all_except(current_branch_name.to_string());
+
+        Ok(())
+    }
+
+    pub fn merge_current(&mut self) -> Result<(), GituiError> {
+        self.values[self.curr_index].merge()?;
 
         Ok(())
     }
